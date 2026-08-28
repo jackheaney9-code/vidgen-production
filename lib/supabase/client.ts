@@ -1,6 +1,7 @@
 import { createBrowserClient } from "@supabase/ssr";
 
 import { getEnv, hasSupabase } from "@/lib/env";
+import type { Database } from "@/types/database";
 
 export function createSupabaseBrowser() {
   if (!hasSupabase()) {
@@ -11,5 +12,9 @@ export function createSupabaseBrowser() {
   if (!url || !key) {
     throw new Error("Supabase is not configured");
   }
-  return createBrowserClient(url, key);
+  return createBrowserClient<Database>(url, key);
+}
+
+export function createClient() {
+  return createSupabaseBrowser();
 }

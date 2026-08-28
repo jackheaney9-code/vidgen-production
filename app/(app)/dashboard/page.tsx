@@ -29,7 +29,7 @@ export default async function DashboardPage() {
             per finished video.
           </p>
         </div>
-        <Link href="/dashboard/new" className={cn(buttonVariants())}>
+        <Link href="/create" className={cn(buttonVariants())}>
           New ad
         </Link>
       </div>
@@ -40,7 +40,7 @@ export default async function DashboardPage() {
           <p className="mt-2 text-sm text-muted-foreground">
             Start with a product still. The script comes back before you spend a credit.
           </p>
-          <Link href="/dashboard/new" className={cn(buttonVariants(), "mt-6")}>
+          <Link href="/create" className={cn(buttonVariants(), "mt-6")}>
             Brief the first one
           </Link>
         </div>

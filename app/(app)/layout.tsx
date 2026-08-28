@@ -6,7 +6,7 @@ import { HttpError } from "@/lib/errors"
 
 export const dynamic = "force-dynamic"
 
-export default async function DashboardLayout({
+export default async function AppLayout({
   children,
 }: {
   children: React.ReactNode

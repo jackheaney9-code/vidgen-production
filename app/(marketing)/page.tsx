@@ -6,7 +6,7 @@ import { getCurrentUser } from "@/lib/auth/require-user"
 
 export const dynamic = "force-dynamic"
 
-export default async function HomePage() {
+export default async function MarketingPage() {
   const user = await getCurrentUser()
   return (
     <div className="min-h-screen">

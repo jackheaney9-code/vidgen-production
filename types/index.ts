@@ -96,3 +96,13 @@ export interface CreditPack {
   blurb: string;
   popular: boolean;
 }
+
+export type { Database, Json } from "@/types/database";
+export type {
+  CompositeJobInput,
+  PipelineResult,
+  PipelineStep,
+  ScriptJobInput,
+  VideoJobInput,
+  VoiceJobInput,
+} from "@/types/pipeline";

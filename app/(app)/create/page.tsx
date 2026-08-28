@@ -1,6 +1,6 @@
 import { AdCreateForm } from "@/components/features/ad-create-form"
 
-export default function NewAdPage() {
+export default function CreatePage() {
   return (
     <div className="mx-auto max-w-3xl space-y-8">
       <div>

@@ -2,8 +2,27 @@ import { z } from "zod";
 
 import { HttpError } from "@/lib/errors";
 import { createSupabaseServer } from "@/lib/supabase/server";
-import type { Ad, CreditTransaction, Profile } from "@/types";
+import type { Ad, AdScript, CreditTransaction, Profile } from "@/types";
+import type { Database, Json } from "@/types/database";
 import { adSchema, creditTransactionSchema } from "@/lib/db/schema";
+
+type AdUpdate = Database["public"]["Tables"]["ads"]["Update"];
+
+function scriptToJson(script: AdScript | null): Json | null {
+  if (!script) {
+    return null;
+  }
+  const value: Json = {
+    hook: script.hook,
+    body: script.body,
+    cta: script.cta,
+    fullText: script.fullText,
+    visualPrompt: script.visualPrompt,
+    onScreenText: script.onScreenText,
+    durationSeconds: script.durationSeconds,
+  };
+  return value;
+}
 
 const profileRowSchema = z.object({
   id: z.string(),
@@ -171,7 +190,7 @@ export async function supabaseCreateAd(ad: Ad): Promise<Ad> {
       audience: ad.audience,
       style: ad.style,
       product_image_path: ad.productImagePath,
-      script: ad.script,
+      script: scriptToJson(ad.script),
       video_path: ad.videoPath,
       voice_path: ad.voicePath,
       final_path: ad.finalPath,
@@ -192,7 +211,7 @@ export async function supabaseUpdateAd(
   patch: Partial<Ad>,
 ): Promise<Ad> {
   const supabase = await createSupabaseServer();
-  const payload: Record<string, unknown> = {
+  const payload: AdUpdate = {
     updated_at: new Date().toISOString(),
   };
   if (patch.productName !== undefined) payload.product_name = patch.productName;
@@ -204,7 +223,7 @@ export async function supabaseUpdateAd(
   if (patch.productImagePath !== undefined) {
     payload.product_image_path = patch.productImagePath;
   }
-  if (patch.script !== undefined) payload.script = patch.script;
+  if (patch.script !== undefined) payload.script = scriptToJson(patch.script);
   if (patch.videoPath !== undefined) payload.video_path = patch.videoPath;
   if (patch.voicePath !== undefined) payload.voice_path = patch.voicePath;
   if (patch.finalPath !== undefined) payload.final_path = patch.finalPath;

@@ -40,7 +40,7 @@ export function DashboardHeader({
           >
             {credits} {credits === 1 ? "credit" : "credits"}
           </Link>
-          <Link href="/dashboard/new" className={cn(buttonVariants())}>
+          <Link href="/create" className={cn(buttonVariants())}>
             New ad
           </Link>
           <DropdownMenu>

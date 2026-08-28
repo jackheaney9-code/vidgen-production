@@ -2,7 +2,18 @@
 
 AI video ad generator. Drop a product still, approve a 15–30 second script, then produce a vertical MP4: picture, voice, and composite.
 
-## Stack
+## Architecture
+
+- `/app/(marketing)` — landing
+- `/app/(app)/dashboard` — ads list and studio
+- `/app/(app)/create` — new ad brief
+- `/app/api` — generate-script, generate-video, generate-voiceover, composite, Stripe webhook
+- `/lib/pipeline` — script, video, voice, composite
+- `/lib/supabase` — browser and server clients
+- `/lib/stripe` — server helpers and Stripe.js client
+- `/types/database.ts` — Supabase schema
+- `/types/pipeline.ts` — generation job types
+
 
 - Next.js 15 (App Router)
 - TypeScript
@@ -15,7 +26,7 @@ AI video ad generator. Drop a product still, approve a 15–30 second script, th
 
 ```bash
 npm install
-cp .env.example .env.local
+cp .env.local.example .env.local
 npm run dev
 ```
 
@@ -51,7 +62,7 @@ Set `DEMO_MODE=false` and fill in:
 
 Run `supabase/migrations/001_init.sql` in the Supabase SQL editor. Create the `ads` storage bucket if the insert in that file is skipped.
 
-Stripe webhook: `https://your-domain/api/webhooks/stripe`.
+Stripe webhook: `https://your-domain/api/webhook/stripe`.
 
 Vercel: this app expects a Node runtime with `ffmpeg` for composite. The hosted AI providers still run without it; local demo composite will not.
 
