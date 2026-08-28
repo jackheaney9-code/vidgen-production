@@ -18,7 +18,7 @@ const instrument = Instrument_Serif({
 export const metadata: Metadata = {
   title: "Lumina — AI video ads from product stills",
   description:
-    "Turn a product photo into a 15–30 second video ad. Script, voice, and picture in one pipeline.",
+    "Turn any product photo into a scroll-stopping video ad in 60 seconds. No filming. No editing. No agency. 3 credits on signup.",
 }
 
 export default function RootLayout({

@@ -20,11 +20,11 @@ export function SiteHeader({ signedIn }: { signedIn: boolean }) {
           <Link href="/#how" className="transition-colors hover:text-foreground">
             How it works
           </Link>
-          <Link href="/#styles" className="transition-colors hover:text-foreground">
-            Styles
-          </Link>
           <Link href="/#pricing" className="transition-colors hover:text-foreground">
             Pricing
+          </Link>
+          <Link href="/#faq" className="transition-colors hover:text-foreground">
+            FAQ
           </Link>
         </nav>
         <div className="hidden items-center gap-2 md:flex">
@@ -38,7 +38,7 @@ export function SiteHeader({ signedIn }: { signedIn: boolean }) {
                 Sign in
               </Link>
               <Link href="/login" className={cn(buttonVariants())}>
-                Start a studio
+                Try Free
               </Link>
             </>
           )}
@@ -58,18 +58,18 @@ export function SiteHeader({ signedIn }: { signedIn: boolean }) {
               <Link href="/#how" onClick={() => setOpen(false)}>
                 How it works
               </Link>
-              <Link href="/#styles" onClick={() => setOpen(false)}>
-                Styles
-              </Link>
               <Link href="/#pricing" onClick={() => setOpen(false)}>
                 Pricing
+              </Link>
+              <Link href="/#faq" onClick={() => setOpen(false)}>
+                FAQ
               </Link>
               <Link
                 href={signedIn ? "/dashboard" : "/login"}
                 className={cn(buttonVariants(), "mt-4")}
                 onClick={() => setOpen(false)}
               >
-                {signedIn ? "Dashboard" : "Start a studio"}
+                {signedIn ? "Dashboard" : "Try Free"}
               </Link>
             </div>
           </SheetContent>

@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { Loader2Icon } from "lucide-react"
 
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
   Card,
@@ -88,17 +89,19 @@ export function PricingCards({
           key={pack.id}
           className={cn(
             "bg-card py-0",
-            pack.popular ? "ring-primary/50" : "ring-white/8",
+            pack.popular ? "ring-2 ring-primary/60" : "ring-white/8",
           )}
         >
           <CardHeader className="pt-6">
             {pack.popular && (
-              <p className="text-xs tracking-wide text-primary">Most used</p>
+              <Badge className="w-fit">Most popular</Badge>
             )}
-            <CardTitle className="font-heading text-2xl">{pack.name}</CardTitle>
+            <CardTitle className="font-heading text-2xl">
+              {pack.credits} {pack.credits === 1 ? "video" : "videos"}
+            </CardTitle>
             <p className="text-3xl font-medium">{formatUsd(pack.priceCents)}</p>
             <CardDescription>
-              {pack.credits} {pack.credits === 1 ? "credit" : "credits"}
+              {pack.credits} {pack.credits === 1 ? "credit" : "credits"} · pay once
             </CardDescription>
           </CardHeader>
           <CardContent>

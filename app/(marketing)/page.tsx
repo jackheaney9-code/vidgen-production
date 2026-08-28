@@ -1,5 +1,4 @@
 import { LandingContent } from "@/components/features/landing-content"
-import { PricingTable } from "@/components/features/pricing-table"
 import { SiteFooter } from "@/components/features/site-footer"
 import { SiteHeader } from "@/components/features/site-header"
 import { getCurrentUser } from "@/lib/auth/require-user"
@@ -12,8 +11,7 @@ export default async function MarketingPage() {
     <div className="min-h-screen">
       <SiteHeader signedIn={Boolean(user)} />
       <main>
-        <LandingContent />
-        <PricingTable signedIn={Boolean(user)} />
+        <LandingContent signedIn={Boolean(user)} />
       </main>
       <SiteFooter />
     </div>

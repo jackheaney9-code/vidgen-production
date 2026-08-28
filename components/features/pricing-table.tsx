@@ -19,6 +19,9 @@ export function PricingTable({
             <h2 className="mt-3 font-heading text-4xl tracking-tight">
               Pay for the ads you actually make.
             </h2>
+            <p className="mt-4 rounded-xl border border-primary/30 bg-primary/10 px-4 py-3 text-sm">
+              3 free videos on signup. Packs are one-time, not a subscription.
+            </p>
           </>
         )}
         <PricingCards signedIn={signedIn} compact={compact} />
