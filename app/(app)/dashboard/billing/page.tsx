@@ -1,6 +1,7 @@
 import { PricingTable } from "@/components/features/pricing-table"
 import { requireUserWithProfile } from "@/lib/auth/require-user"
-import { listTransactions } from "@/lib/db"
+import { listPurchases } from "@/lib/db"
+import { formatUsd } from "@/lib/constants"
 
 export default async function BillingPage({
   searchParams,
@@ -9,7 +10,7 @@ export default async function BillingPage({
 }) {
   const { user, profile } = await requireUserWithProfile()
   const { status } = await searchParams
-  const transactions = await listTransactions(user.id)
+  const purchases = await listPurchases(user.id)
 
   return (
     <div className="space-y-10">
@@ -29,17 +30,16 @@ export default async function BillingPage({
       <PricingTable signedIn compact />
       <div>
         <h2 className="font-heading text-2xl">Ledger</h2>
-        {transactions.length === 0 ? (
-          <p className="mt-3 text-sm text-muted-foreground">No movements yet.</p>
+        {purchases.length === 0 ? (
+          <p className="mt-3 text-sm text-muted-foreground">No purchases yet.</p>
         ) : (
           <ul className="mt-4 divide-y divide-white/8 rounded-xl border border-white/8">
-            {transactions.map((item) => (
+            {purchases.map((item) => (
               <li key={item.id} className="flex items-center justify-between px-4 py-3 text-sm">
-                <span>{item.reason.replaceAll("_", " ")}</span>
-                <span className={item.amount > 0 ? "text-primary" : "text-muted-foreground"}>
-                  {item.amount > 0 ? "+" : ""}
-                  {item.amount}
+                <span>
+                  {item.creditsPurchased} credits · {formatUsd(item.amountPaid)}
                 </span>
+                <span className="text-primary">+{item.creditsPurchased}</span>
               </li>
             ))}
           </ul>

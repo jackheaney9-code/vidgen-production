@@ -1,18 +1,22 @@
 import { createServerClient } from "@supabase/ssr";
 import { type NextRequest, NextResponse } from "next/server";
+import type { User } from "@supabase/supabase-js";
 
 import { getEnv, hasSupabase } from "@/lib/env";
 import type { Database } from "@/types/database";
 
-export async function updateSupabaseSession(request: NextRequest) {
+export async function updateSupabaseSession(request: NextRequest): Promise<{
+  response: NextResponse;
+  user: User | null;
+}> {
   const response = NextResponse.next({ request });
   if (!hasSupabase()) {
-    return response;
+    return { response, user: null };
   }
   const url = getEnv("NEXT_PUBLIC_SUPABASE_URL");
   const key = getEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY");
   if (!url || !key) {
-    return response;
+    return { response, user: null };
   }
 
   const supabase = createServerClient<Database>(url, key, {
@@ -29,6 +33,6 @@ export async function updateSupabaseSession(request: NextRequest) {
     },
   });
 
-  await supabase.auth.getUser();
-  return response;
+  const { data } = await supabase.auth.getUser();
+  return { response, user: data.user };
 }

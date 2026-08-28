@@ -1,4 +1,3 @@
-import Link from "next/link"
 import { redirect } from "next/navigation"
 import { Suspense } from "react"
 
@@ -18,13 +17,10 @@ export default async function LoginPage() {
       <Logo className="mb-10 justify-center" />
       <h1 className="font-heading text-4xl">Sign in</h1>
       <p className="mt-2 mb-8 text-sm text-muted-foreground">
-        New here?{" "}
-        <Link href="/signup" className="text-primary">
-          Create a studio
-        </Link>
+        Google or a magic link. New studios start with 3 credits.
       </p>
       <Suspense>
-        <AuthForm mode="login" />
+        <AuthForm />
       </Suspense>
     </div>
   )

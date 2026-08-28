@@ -35,9 +35,11 @@ export function AdStudio({ initial }: { initial: StudioPayload }) {
   const [payload, setPayload] = useState(initial)
   const [script, setScript] = useState<AdScript | null>(initial.ad.script)
   const [busy, setBusy] = useState<ProduceStep | null>(
-    initial.ad.status === "draft" || initial.ad.status === "script_pending"
+    initial.ad.status === "pending" && !initial.ad.script
       ? "script"
-      : null,
+      : initial.ad.status === "generating_script"
+        ? "script"
+        : null,
   )
   const [error, setError] = useState<string | null>(initial.ad.error)
   const [payment, setPayment] = useState(false)
@@ -45,22 +47,21 @@ export function AdStudio({ initial }: { initial: StudioPayload }) {
   const ad = payload.ad
 
   useEffect(() => {
-    if (ad.status === "draft") {
+    if (ad.status === "pending" && !ad.script) {
       void runScript()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  async function refresh() {
+  async function refresh(): Promise<StudioPayload | null> {
     const res = await fetch(`/api/ads/${ad.id}`)
     const data: unknown = await res.json()
-    if (!res.ok) {
-      return
+    if (!res.ok || !isPayload(data)) {
+      return null
     }
-    if (isPayload(data)) {
-      setPayload(data)
-      setScript(data.ad.script)
-    }
+    setPayload(data)
+    setScript(data.ad.script)
+    return data
   }
 
   async function runScript() {
@@ -94,20 +95,20 @@ export function AdStudio({ initial }: { initial: StudioPayload }) {
     setError(null)
     setPayment(false)
     try {
-      let status = payload.ad.status
-      if (status === "failed" || status === "script_ready" || status === "draft") {
+      let current = payload.ad
+      if (!current.videoPath) {
         setBusy("video")
         await postJson("/api/generate-video", { adId: ad.id })
-        await refresh()
-        status = "video_ready"
+        const next = await refresh()
+        if (next) current = next.ad
       }
-      if (status === "video_ready") {
+      if (!current.voicePath) {
         setBusy("voice")
         await postJson("/api/generate-voiceover", { adId: ad.id })
-        await refresh()
-        status = "voice_ready"
+        const next = await refresh()
+        if (next) current = next.ad
       }
-      if (status === "voice_ready") {
+      if (!current.finalPath) {
         setBusy("composite")
         await postJson("/api/composite", { adId: ad.id })
         await refresh()
@@ -133,10 +134,10 @@ export function AdStudio({ initial }: { initial: StudioPayload }) {
   const canProduce =
     Boolean(script) &&
     busy === null &&
-    ad.status !== "complete" &&
-    ad.status !== "script_pending" &&
-    ad.status !== "video_pending" &&
-    ad.status !== "voice_pending" &&
+    ad.status !== "completed" &&
+    ad.status !== "generating_script" &&
+    ad.status !== "generating_video" &&
+    ad.status !== "generating_voice" &&
     ad.status !== "compositing"
 
   return (
@@ -168,7 +169,7 @@ export function AdStudio({ initial }: { initial: StudioPayload }) {
       </div>
 
       <div className="space-y-6">
-        <PipelineRail status={ad.status} busy={busy} />
+        <PipelineRail status={ad.status} busy={busy} scriptReady={Boolean(script)} />
 
         {error && (
           <Alert variant="destructive">
@@ -274,15 +275,25 @@ function Field({
 function PipelineRail({
   status,
   busy,
+  scriptReady,
 }: {
   status: Ad["status"]
   busy: ProduceStep | null
+  scriptReady: boolean
 }) {
   const steps = [
-    { key: "script", label: "Script", done: hasPassed(status, "script_ready") },
-    { key: "video", label: "Picture", done: hasPassed(status, "video_ready") },
-    { key: "voice", label: "Voice", done: hasPassed(status, "voice_ready") },
-    { key: "composite", label: "Composite", done: status === "complete" },
+    { key: "script", label: "Script", done: scriptReady },
+    {
+      key: "video",
+      label: "Picture",
+      done: status === "generating_voice" || status === "compositing" || status === "completed",
+    },
+    {
+      key: "voice",
+      label: "Voice",
+      done: status === "compositing" || status === "completed",
+    },
+    { key: "composite", label: "Composite", done: status === "completed" },
   ] as const
 
   return (
@@ -314,23 +325,6 @@ function PipelineRail({
       })}
     </ol>
   )
-}
-
-function hasPassed(status: Ad["status"], gate: Ad["status"]): boolean {
-  const order: Ad["status"][] = [
-    "draft",
-    "script_pending",
-    "script_ready",
-    "video_pending",
-    "video_ready",
-    "voice_pending",
-    "voice_ready",
-    "compositing",
-    "complete",
-  ]
-  const current = order.indexOf(status)
-  const target = order.indexOf(gate)
-  return current >= target
 }
 
 class PaymentRequiredError extends Error {

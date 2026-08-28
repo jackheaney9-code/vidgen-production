@@ -1,23 +1,14 @@
-export const AD_STYLES = [
-  "cinematic",
-  "ugc",
-  "luxury",
-  "energetic",
-  "minimal",
-] as const;
+export const AD_STYLES = ["showcase", "lifestyle", "before_after"] as const;
 
 export type AdStyle = (typeof AD_STYLES)[number];
 
 export const AD_STATUSES = [
-  "draft",
-  "script_pending",
-  "script_ready",
-  "video_pending",
-  "video_ready",
-  "voice_pending",
-  "voice_ready",
+  "pending",
+  "generating_script",
+  "generating_video",
+  "generating_voice",
   "compositing",
-  "complete",
+  "completed",
   "failed",
 ] as const;
 
@@ -41,6 +32,7 @@ export interface Profile {
   id: string;
   email: string;
   credits: number;
+  stripeCustomerId: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -71,6 +63,15 @@ export interface CreditTransaction {
   reason: string;
   adId: string | null;
   stripeSessionId: string | null;
+  createdAt: string;
+}
+
+export interface Purchase {
+  id: string;
+  userId: string;
+  stripeSessionId: string;
+  creditsPurchased: number;
+  amountPaid: number;
   createdAt: string;
 }
 

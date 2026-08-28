@@ -43,7 +43,7 @@ export async function POST(request: Request) {
       const stored = await saveUserFile(ad.userId, relative, bytes);
       const updated = await updateAd(ad.id, {
         finalPath: stored,
-        status: "complete",
+        status: "completed",
         error: null,
       });
       return jsonOk({

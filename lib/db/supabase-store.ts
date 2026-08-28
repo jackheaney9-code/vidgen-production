@@ -1,52 +1,68 @@
 import { z } from "zod";
 
+import { creditHeld } from "@/lib/constants";
 import { HttpError } from "@/lib/errors";
 import { createSupabaseServer } from "@/lib/supabase/server";
-import type { Ad, AdScript, CreditTransaction, Profile } from "@/types";
-import type { Database, Json } from "@/types/database";
-import { adSchema, creditTransactionSchema } from "@/lib/db/schema";
+import type { Ad, AdScript, CreditTransaction, Profile, Purchase } from "@/types";
+import type { Database } from "@/types/database";
+import { adSchema, adScriptSchema, purchaseSchema } from "@/lib/db/schema";
 
-type AdUpdate = Database["public"]["Tables"]["ads"]["Update"];
+type GenerationUpdate = Database["public"]["Tables"]["generations"]["Update"];
 
-function scriptToJson(script: AdScript | null): Json | null {
+function scriptToText(script: AdScript | null): string | null {
   if (!script) {
     return null;
   }
-  const value: Json = {
-    hook: script.hook,
-    body: script.body,
-    cta: script.cta,
-    fullText: script.fullText,
-    visualPrompt: script.visualPrompt,
-    onScreenText: script.onScreenText,
-    durationSeconds: script.durationSeconds,
+  return JSON.stringify(script);
+}
+
+function scriptFromText(value: string | null): AdScript | null {
+  if (!value) {
+    return null;
+  }
+  try {
+    const parsed: unknown = JSON.parse(value);
+    const result = adScriptSchema.safeParse(parsed);
+    if (result.success) {
+      return result.data;
+    }
+  } catch {
+    // Stored as plain voiceover text
+  }
+  return {
+    hook: value.slice(0, 80),
+    body: value,
+    cta: "",
+    fullText: value,
+    visualPrompt: value,
+    onScreenText: [],
+    durationSeconds: 18,
   };
-  return value;
 }
 
 const profileRowSchema = z.object({
   id: z.string(),
   email: z.string().email(),
   credits: z.number().int(),
+  stripe_customer_id: z.string().nullable(),
   created_at: z.string(),
   updated_at: z.string(),
 });
 
-const adRowSchema = z.object({
+const generationRowSchema = z.object({
   id: z.string(),
   user_id: z.string(),
+  status: z.string(),
   product_name: z.string(),
   product_description: z.string(),
-  audience: z.string(),
+  target_audience: z.string(),
   style: z.string(),
   product_image_path: z.string(),
-  script: z.unknown(),
-  video_path: z.string().nullable(),
-  voice_path: z.string().nullable(),
-  final_path: z.string().nullable(),
-  status: z.string(),
-  error: z.string().nullable(),
-  credit_deducted: z.boolean(),
+  script: z.string().nullable(),
+  video_url: z.string().nullable(),
+  voiceover_url: z.string().nullable(),
+  final_video_url: z.string().nullable(),
+  error_message: z.string().nullable(),
   created_at: z.string(),
   updated_at: z.string(),
 });
@@ -56,27 +72,28 @@ function mapProfile(row: z.infer<typeof profileRowSchema>): Profile {
     id: row.id,
     email: row.email,
     credits: row.credits,
+    stripeCustomerId: row.stripe_customer_id,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
 }
 
-function mapAd(row: z.infer<typeof adRowSchema>): Ad {
+function mapAd(row: z.infer<typeof generationRowSchema>): Ad {
   return adSchema.parse({
     id: row.id,
     userId: row.user_id,
     productName: row.product_name,
     productDescription: row.product_description,
-    audience: row.audience,
+    audience: row.target_audience,
     style: row.style,
     productImagePath: row.product_image_path,
-    script: row.script,
-    videoPath: row.video_path,
-    voicePath: row.voice_path,
-    finalPath: row.final_path,
+    script: scriptFromText(row.script),
+    videoPath: row.video_url,
+    voicePath: row.voiceover_url,
+    finalPath: row.final_video_url,
     status: row.status,
-    error: row.error,
-    creditDeducted: row.credit_deducted,
+    error: row.error_message,
+    creditDeducted: creditHeld(row.status),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   });
@@ -120,18 +137,12 @@ export async function supabaseCreateProfile(input: {
 }
 
 export async function supabaseUpdateCredits(
-  userId: string,
+  _userId: string,
   delta: number,
-  reason: string,
-  adId: string | null,
-  stripeSessionId: string | null,
 ): Promise<Profile> {
   const supabase = await createSupabaseServer();
   const { data, error } = await supabase.rpc("apply_credit_delta", {
     p_delta: delta,
-    p_reason: reason,
-    p_ad_id: adId,
-    p_stripe_session_id: stripeSessionId,
   });
   if (error) {
     if (error.message.includes("insufficient_credits")) {
@@ -142,30 +153,26 @@ export async function supabaseUpdateCredits(
   if (typeof data === "object" && data !== null) {
     return mapProfile(profileRowSchema.parse(data));
   }
-  const profile = await supabaseGetProfile(userId);
-  if (!profile) {
-    throw new Error("Profile not found");
-  }
-  return profile;
+  throw new Error("Profile not found");
 }
 
 export async function supabaseListAds(userId: string): Promise<Ad[]> {
   const supabase = await createSupabaseServer();
   const { data, error } = await supabase
-    .from("ads")
+    .from("generations")
     .select("*")
     .eq("user_id", userId)
     .order("created_at", { ascending: false });
   if (error) {
     throw new Error(error.message);
   }
-  return (data ?? []).map((row) => mapAd(adRowSchema.parse(row)));
+  return (data ?? []).map((row) => mapAd(generationRowSchema.parse(row)));
 }
 
 export async function supabaseGetAd(id: string): Promise<Ad | null> {
   const supabase = await createSupabaseServer();
   const { data, error } = await supabase
-    .from("ads")
+    .from("generations")
     .select("*")
     .eq("id", id)
     .maybeSingle();
@@ -175,35 +182,34 @@ export async function supabaseGetAd(id: string): Promise<Ad | null> {
   if (!data) {
     return null;
   }
-  return mapAd(adRowSchema.parse(data));
+  return mapAd(generationRowSchema.parse(data));
 }
 
 export async function supabaseCreateAd(ad: Ad): Promise<Ad> {
   const supabase = await createSupabaseServer();
   const { data, error } = await supabase
-    .from("ads")
+    .from("generations")
     .insert({
       id: ad.id,
       user_id: ad.userId,
       product_name: ad.productName,
       product_description: ad.productDescription,
-      audience: ad.audience,
+      target_audience: ad.audience,
       style: ad.style,
       product_image_path: ad.productImagePath,
-      script: scriptToJson(ad.script),
-      video_path: ad.videoPath,
-      voice_path: ad.voicePath,
-      final_path: ad.finalPath,
+      script: scriptToText(ad.script),
+      video_url: ad.videoPath,
+      voiceover_url: ad.voicePath,
+      final_video_url: ad.finalPath,
       status: ad.status,
-      error: ad.error,
-      credit_deducted: ad.creditDeducted,
+      error_message: ad.error,
     })
     .select("*")
     .single();
   if (error) {
     throw new Error(error.message);
   }
-  return mapAd(adRowSchema.parse(data));
+  return mapAd(generationRowSchema.parse(data));
 }
 
 export async function supabaseUpdateAd(
@@ -211,30 +217,27 @@ export async function supabaseUpdateAd(
   patch: Partial<Ad>,
 ): Promise<Ad> {
   const supabase = await createSupabaseServer();
-  const payload: AdUpdate = {
+  const payload: GenerationUpdate = {
     updated_at: new Date().toISOString(),
   };
   if (patch.productName !== undefined) payload.product_name = patch.productName;
   if (patch.productDescription !== undefined) {
     payload.product_description = patch.productDescription;
   }
-  if (patch.audience !== undefined) payload.audience = patch.audience;
+  if (patch.audience !== undefined) payload.target_audience = patch.audience;
   if (patch.style !== undefined) payload.style = patch.style;
   if (patch.productImagePath !== undefined) {
     payload.product_image_path = patch.productImagePath;
   }
-  if (patch.script !== undefined) payload.script = scriptToJson(patch.script);
-  if (patch.videoPath !== undefined) payload.video_path = patch.videoPath;
-  if (patch.voicePath !== undefined) payload.voice_path = patch.voicePath;
-  if (patch.finalPath !== undefined) payload.final_path = patch.finalPath;
+  if (patch.script !== undefined) payload.script = scriptToText(patch.script);
+  if (patch.videoPath !== undefined) payload.video_url = patch.videoPath;
+  if (patch.voicePath !== undefined) payload.voiceover_url = patch.voicePath;
+  if (patch.finalPath !== undefined) payload.final_video_url = patch.finalPath;
   if (patch.status !== undefined) payload.status = patch.status;
-  if (patch.error !== undefined) payload.error = patch.error;
-  if (patch.creditDeducted !== undefined) {
-    payload.credit_deducted = patch.creditDeducted;
-  }
+  if (patch.error !== undefined) payload.error_message = patch.error;
 
   const { data, error } = await supabase
-    .from("ads")
+    .from("generations")
     .update(payload)
     .eq("id", id)
     .select("*")
@@ -242,15 +245,13 @@ export async function supabaseUpdateAd(
   if (error) {
     throw new Error(error.message);
   }
-  return mapAd(adRowSchema.parse(data));
+  return mapAd(generationRowSchema.parse(data));
 }
 
-export async function supabaseListTransactions(
-  userId: string,
-): Promise<CreditTransaction[]> {
+export async function supabaseListPurchases(userId: string): Promise<Purchase[]> {
   const supabase = await createSupabaseServer();
   const { data, error } = await supabase
-    .from("credit_transactions")
+    .from("purchases")
     .select("*")
     .eq("user_id", userId)
     .order("created_at", { ascending: false });
@@ -258,17 +259,28 @@ export async function supabaseListTransactions(
     throw new Error(error.message);
   }
   return (data ?? []).map((row) =>
-    creditTransactionSchema.parse({
-      id: z.string().parse(row.id),
-      userId: z.string().parse(row.user_id),
-      amount: z.number().parse(row.amount),
-      reason: z.string().parse(row.reason),
-      adId: row.ad_id === null ? null : z.string().parse(row.ad_id),
-      stripeSessionId:
-        row.stripe_session_id === null
-          ? null
-          : z.string().parse(row.stripe_session_id),
-      createdAt: z.string().parse(row.created_at),
+    purchaseSchema.parse({
+      id: row.id,
+      userId: row.user_id,
+      stripeSessionId: row.stripe_session_id,
+      creditsPurchased: row.credits_purchased,
+      amountPaid: row.amount_paid,
+      createdAt: row.created_at,
     }),
   );
+}
+
+export async function supabaseListTransactions(
+  userId: string,
+): Promise<CreditTransaction[]> {
+  const purchases = await supabaseListPurchases(userId);
+  return purchases.map((item) => ({
+    id: item.id,
+    userId: item.userId,
+    amount: item.creditsPurchased,
+    reason: "stripe_purchase",
+    adId: null,
+    stripeSessionId: item.stripeSessionId,
+    createdAt: item.createdAt,
+  }));
 }

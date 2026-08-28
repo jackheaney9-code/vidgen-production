@@ -47,7 +47,7 @@ export function LandingContent() {
             </p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
               <a
-                href="/signup"
+                href="/login"
                 className="inline-flex h-11 items-center justify-center rounded-lg bg-primary px-5 text-sm font-medium text-primary-foreground"
               >
                 Make an ad
@@ -94,9 +94,9 @@ export function LandingContent() {
         <div className="mx-auto max-w-6xl px-4">
           <p className="text-xs tracking-[0.2em] text-primary uppercase">Looks</p>
           <h2 className="mt-3 font-heading text-4xl tracking-tight">
-            Five treatments. Same product.
+            Three treatments. Same product.
           </h2>
-          <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+          <div className="mt-10 grid gap-4 sm:grid-cols-3">
             {AD_STYLES.map((style) => (
               <div
                 key={style}

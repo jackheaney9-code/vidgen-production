@@ -1,7 +1,7 @@
 import { createCheckoutSession, getCreditPack } from "@/lib/stripe";
 import { requireUserWithProfile } from "@/lib/auth/require-user";
 import { checkoutSchema } from "@/lib/db/schema";
-import { updateCredits } from "@/lib/db";
+import { createPurchase, updateCredits } from "@/lib/db";
 import { jsonError, jsonFromUnknown, jsonOk } from "@/lib/http";
 import { hasStripe } from "@/lib/env";
 
@@ -23,6 +23,14 @@ export async function POST(request: Request) {
         pack.credits,
         `demo_purchase_${pack.id}`,
       );
+      await createPurchase({
+        id: crypto.randomUUID(),
+        userId: user.id,
+        stripeSessionId: `demo_${crypto.randomUUID()}`,
+        creditsPurchased: pack.credits,
+        amountPaid: pack.priceCents,
+        createdAt: new Date().toISOString(),
+      });
       return jsonOk({
         demo: true,
         credits: updated.credits,

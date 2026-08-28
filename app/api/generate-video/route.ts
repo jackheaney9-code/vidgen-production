@@ -29,7 +29,7 @@ export async function POST(request: Request) {
     }
 
     await deductVideoCredit(ad);
-    await updateAd(ad.id, { status: "video_pending", error: null });
+    await updateAd(ad.id, { status: "generating_video", error: null });
 
     try {
       const relative = `${ad.id}/video.mp4`;
@@ -39,7 +39,7 @@ export async function POST(request: Request) {
       const stored = await saveUserFile(ad.userId, relative, bytes);
       const updated = await updateAd(ad.id, {
         videoPath: stored,
-        status: "video_ready",
+        status: "generating_video",
         error: null,
       });
       return jsonOk({ ad: updated });

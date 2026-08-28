@@ -46,35 +46,23 @@ export function mockScript(input: {
     AdStyle,
     { hook: string; body: string; cta: string; visual: string }
   > = {
-    cinematic: {
-      hook: `You already know what ${audience.toLowerCase()} want. They just haven't seen it like this.`,
-      body: `${name}. ${benefit} One frame. One feeling. Then they tap through.`,
-      cta: `Meet ${name}. The version they replay.`,
-      visual: `Cinematic 9:16 commercial of ${name}, slow camera push-in, volumetric light, shallow depth of field, film grain, luxury tabletop, the product slowly rotating, dark moody atmosphere`,
+    showcase: {
+      hook: `Look closer. This is ${name}.`,
+      body: `${benefit} Built for ${audience.toLowerCase()} who notice the details.`,
+      cta: `${name}. See it in motion.`,
+      visual: `Showcase 9:16 studio commercial of ${name}, slow camera orbit, crisp rim light, seamless backdrop, product hero, commercial grade`,
     },
-    ugc: {
-      hook: `Okay wait — I actually use this.`,
-      body: `${name} is ${benefit} If you're ${audience.toLowerCase()}, this is the one I'd send you.`,
-      cta: `Grab ${name} before I gatekeep it.`,
-      visual: `Handheld UGC 9:16 of ${name} on a real desk, natural window light, creator hands showing the product, slight camera sway, authentic social video`,
+    lifestyle: {
+      hook: `This is what the morning looks like now.`,
+      body: `${name}. ${benefit} For ${audience.toLowerCase()} who want it in the real world, not a lightbox.`,
+      cta: `Bring ${name} home.`,
+      visual: `Lifestyle 9:16 of ${name} in a lived-in apartment, natural window light, hands using the product, warm documentary commercial`,
     },
-    luxury: {
-      hook: `Quiet things tend to last.`,
-      body: `${name}. ${benefit} Made for ${audience.toLowerCase()} who don't need to announce it.`,
-      cta: `${name}. Yours, if you want it.`,
-      visual: `Editorial luxury 9:16 still-life of ${name}, black marble, gold rim light, slow crane down, museum lighting, ultra sharp product photography in motion`,
-    },
-    energetic: {
-      hook: `Stop scrolling. This is the product.`,
-      body: `${name} — ${benefit} Built for ${audience.toLowerCase()} who move fast.`,
-      cta: `Get ${name}. Don't overthink it.`,
-      visual: `High-energy 9:16 product hero of ${name}, snap zooms, bold lighting, dynamic camera orbit, commercial sports energy, crisp highlights`,
-    },
-    minimal: {
-      hook: `One product. One job.`,
-      body: `${name}. ${benefit}`,
-      cta: `${name}. That's it.`,
-      visual: `Minimal 9:16 studio shot of ${name} on a seamless backdrop, slow dolly, soft shadow, lots of negative space, quiet premium commercial`,
+    before_after: {
+      hook: `You already know the before.`,
+      body: `After ${name}: ${benefit} That's the difference ${audience.toLowerCase()} feel.`,
+      cta: `Start the after. Get ${name}.`,
+      visual: `Before-and-after 9:16 commercial of ${name}, split energy from dull to radiant, then hold on the product, clean social ad`,
     },
   };
 

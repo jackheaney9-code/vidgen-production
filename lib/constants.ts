@@ -6,25 +6,17 @@ export const STYLE_META: Record<
   AdStyle,
   { label: string; description: string }
 > = {
-  cinematic: {
-    label: "Cinematic",
-    description: "Slow push-in, film grain, dramatic light.",
+  showcase: {
+    label: "Showcase",
+    description: "Hero product, studio light, slow orbit.",
   },
-  ugc: {
-    label: "UGC",
-    description: "Handheld, native social, talking-to-camera energy.",
+  lifestyle: {
+    label: "Lifestyle",
+    description: "In someone’s hands, real rooms, lived-in light.",
   },
-  luxury: {
-    label: "Luxury",
-    description: "Editorial stillness, gold, shadow, restraint.",
-  },
-  energetic: {
-    label: "Energetic",
-    description: "Punchy type, product hero, quick rhythm.",
-  },
-  minimal: {
-    label: "Minimal",
-    description: "Quiet frame, one claim, lots of air.",
+  before_after: {
+    label: "Before / after",
+    description: "The problem, then the product, then the proof.",
   },
 };
 
@@ -74,4 +66,13 @@ export function formatUsd(cents: number): string {
     currency: "USD",
     maximumFractionDigits: 0,
   }).format(dollars);
+}
+
+export function creditHeld(status: string): boolean {
+  return (
+    status === "generating_video" ||
+    status === "generating_voice" ||
+    status === "compositing" ||
+    status === "completed"
+  );
 }

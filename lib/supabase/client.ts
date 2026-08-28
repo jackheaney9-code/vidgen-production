@@ -1,9 +1,9 @@
-import { createBrowserClient } from "@supabase/ssr";
+import { createBrowserClient as createSsrBrowserClient } from "@supabase/ssr";
 
 import { getEnv, hasSupabase } from "@/lib/env";
 import type { Database } from "@/types/database";
 
-export function createSupabaseBrowser() {
+export function createBrowserClient() {
   if (!hasSupabase()) {
     throw new Error("Supabase is not configured");
   }
@@ -12,9 +12,8 @@ export function createSupabaseBrowser() {
   if (!url || !key) {
     throw new Error("Supabase is not configured");
   }
-  return createBrowserClient<Database>(url, key);
+  return createSsrBrowserClient<Database>(url, key);
 }
 
-export function createClient() {
-  return createSupabaseBrowser();
-}
+export const createClient = createBrowserClient;
+export const createSupabaseBrowser = createBrowserClient;

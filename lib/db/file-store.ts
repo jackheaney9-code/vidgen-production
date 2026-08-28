@@ -2,8 +2,8 @@ import { mkdir, readFile, writeFile } from "fs/promises";
 import path from "path";
 
 import { storeFileSchema, type AdRecord, type ProfileRecord, type StoreFile } from "@/lib/db/schema";
-import type { Ad, CreditTransaction, Profile } from "@/types";
-import { adSchema, creditTransactionSchema, profileSchema } from "@/lib/db/schema";
+import type { Ad, CreditTransaction, Profile, Purchase } from "@/types";
+import { adSchema, creditTransactionSchema, profileSchema, purchaseSchema } from "@/lib/db/schema";
 
 const DATA_DIR = path.join(process.cwd(), "data");
 const STORE_PATH = path.join(DATA_DIR, "store.json");
@@ -12,6 +12,7 @@ const emptyStore: StoreFile = {
   profiles: [],
   ads: [],
   transactions: [],
+  purchases: [],
 };
 
 let chain: Promise<unknown> = Promise.resolve();
@@ -49,6 +50,7 @@ function toProfile(record: ProfileRecord): Profile {
     id: record.id,
     email: record.email,
     credits: record.credits,
+    stripeCustomerId: record.stripeCustomerId ?? null,
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
   };
@@ -84,6 +86,7 @@ export async function fileCreateProfile(input: {
       id: input.id,
       email: input.email.toLowerCase(),
       credits: input.credits,
+      stripeCustomerId: null,
       createdAt: now,
       updatedAt: now,
       passwordHash: input.passwordHash,
@@ -192,8 +195,31 @@ export async function fileListTransactions(
     .map((item) => creditTransactionSchema.parse(item));
 }
 
+export async function fileCreatePurchase(purchase: Purchase): Promise<Purchase> {
+  return withLock(async () => {
+    const store = await loadStore();
+    const record = purchaseSchema.parse(purchase);
+    store.purchases.unshift(record);
+    await saveStore(store);
+    return record;
+  });
+}
+
+export async function fileListPurchases(userId: string): Promise<Purchase[]> {
+  const store = await loadStore();
+  return store.purchases
+    .filter((item) => item.userId === userId)
+    .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+}
+
 export function parseProfile(record: ProfileRecord): Profile {
-  return profileSchema
-    .omit({ passwordHash: true })
-    .parse(record);
+  const parsed = profileSchema.omit({ passwordHash: true }).parse(record);
+  return {
+    id: parsed.id,
+    email: parsed.email,
+    credits: parsed.credits,
+    stripeCustomerId: parsed.stripeCustomerId ?? null,
+    createdAt: parsed.createdAt,
+    updatedAt: parsed.updatedAt,
+  };
 }

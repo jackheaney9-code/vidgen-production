@@ -13,11 +13,8 @@ export async function middleware(request: NextRequest) {
   }
 
   if (!isDemoMode() && hasSupabase()) {
-    const response = await updateSupabaseSession(request);
-    const hasAuth = request.cookies
-      .getAll()
-      .some((cookie) => cookie.name.startsWith("sb-"));
-    if (!hasAuth) {
+    const { response, user } = await updateSupabaseSession(request);
+    if (!user) {
       const login = new URL("/login", request.url);
       login.searchParams.set("next", pathname);
       return NextResponse.redirect(login);

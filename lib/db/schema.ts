@@ -15,15 +15,12 @@ export const adScriptSchema = z.object({
 export const adStyleSchema = z.enum(AD_STYLES);
 
 export const adStatusSchema = z.enum([
-  "draft",
-  "script_pending",
-  "script_ready",
-  "video_pending",
-  "video_ready",
-  "voice_pending",
-  "voice_ready",
+  "pending",
+  "generating_script",
+  "generating_video",
+  "generating_voice",
   "compositing",
-  "complete",
+  "completed",
   "failed",
 ]);
 
@@ -31,6 +28,7 @@ export const profileSchema = z.object({
   id: z.string().min(1),
   email: z.string().email(),
   credits: z.number().int(),
+  stripeCustomerId: z.string().nullable().optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
   passwordHash: z.string().optional(),
@@ -65,6 +63,15 @@ export const creditTransactionSchema = z.object({
   createdAt: z.string(),
 });
 
+export const purchaseSchema = z.object({
+  id: z.string().min(1),
+  userId: z.string().min(1),
+  stripeSessionId: z.string().min(1),
+  creditsPurchased: z.number().int(),
+  amountPaid: z.number().int(),
+  createdAt: z.string(),
+});
+
 export const generateBodySchema = z.object({
   adId: z.string().min(1),
 });
@@ -78,17 +85,23 @@ export const checkoutSchema = z.object({
   pack: z.enum(CREDIT_PACKS),
 });
 
+export const magicLinkSchema = z.object({
+  email: z.string().email(),
+});
+
 export const authSchema = z.object({
   email: z.string().email(),
-  password: z.string().min(8).max(72),
+  password: z.string().min(8),
 });
 
 export const storeFileSchema = z.object({
   profiles: z.array(profileSchema),
   ads: z.array(adSchema),
   transactions: z.array(creditTransactionSchema),
+  purchases: z.array(purchaseSchema).default([]),
 });
 
 export type ProfileRecord = z.infer<typeof profileSchema>;
 export type AdRecord = z.infer<typeof adSchema>;
 export type StoreFile = z.infer<typeof storeFileSchema>;
+export type PurchaseRecord = z.infer<typeof purchaseSchema>;

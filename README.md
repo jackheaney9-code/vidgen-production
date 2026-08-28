@@ -5,22 +5,19 @@ AI video ad generator. Drop a product still, approve a 15–30 second script, th
 ## Architecture
 
 - `/app/(marketing)` — landing
-- `/app/(app)/dashboard` — ads list and studio
-- `/app/(app)/create` — new ad brief
+- `/app/(app)` — protected dashboard, create, billing (redirects to `/login` if signed out)
+- `/app/(auth)/login` — Google OAuth and email magic link
+- `/app/(auth)/callback` — OAuth / magic-link code exchange
 - `/app/api` — generate-script, generate-video, generate-voiceover, composite, Stripe webhook
 - `/lib/pipeline` — script, video, voice, composite
-- `/lib/supabase` — browser and server clients
+- `/lib/supabase/server.ts` — `createServerClient` (`@supabase/ssr`)
+- `/lib/supabase/client.ts` — `createBrowserClient`
+- `/lib/supabase/schema.sql` — Postgres tables, signup trigger, RLS
 - `/lib/stripe` — server helpers and Stripe.js client
-- `/types/database.ts` — Supabase schema
+- `/types/database.ts` — Supabase schema types
 - `/types/pipeline.ts` — generation job types
 
-
-- Next.js 15 (App Router)
-- TypeScript
-- Tailwind CSS + shadcn/ui
-- Supabase (auth, Postgres, Storage) — optional in demo mode
-- Stripe credit packs
-- Anthropic Claude (scripts), Runway Gen-4.5 (video), ElevenLabs (voice)
+Stack: Next.js 15 (App Router), TypeScript, Tailwind CSS + shadcn/ui, Supabase (auth, Postgres, Storage — optional in demo mode), Stripe credit packs, Anthropic Claude, Runway Gen-4.5, ElevenLabs.
 
 ## Run locally
 
@@ -35,6 +32,17 @@ Open [http://127.0.0.1:43127](http://127.0.0.1:43127).
 Demo mode is on by default. Use **Continue with a demo studio** to get 3 credits. Script, picture, and voice run on local stand-ins (Claude-style copy, ffmpeg Ken Burns, espeak-ng) until you add API keys.
 
 You need `ffmpeg` on the PATH for mock picture and composite. Voice mock also uses `espeak-ng`.
+
+## Auth
+
+`/login` supports Google OAuth and an email magic link. New accounts get a `profiles` row with **3 free credits** via the `handle_new_user` trigger on `auth.users`.
+
+In the Supabase dashboard:
+
+1. Enable Google and Email (OTP) providers
+2. Add `{APP_URL}/callback` to Redirect URLs (example: `http://127.0.0.1:43127/callback`)
+
+Protected app routes live under `/app/(app)` and send unauthenticated users to `/login`.
 
 ## Pipeline
 
@@ -58,9 +66,11 @@ Set `DEMO_MODE=false` and fill in:
 - `ELEVENLABS_API_KEY`
 - `STRIPE_SECRET_KEY`
 - `STRIPE_WEBHOOK_SECRET`
+- `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`
 - `SESSION_SECRET`
+- `NEXT_PUBLIC_APP_URL`
 
-Run `supabase/migrations/001_init.sql` in the Supabase SQL editor. Create the `ads` storage bucket if the insert in that file is skipped.
+Run `lib/supabase/schema.sql` (same as `supabase/migrations/001_init.sql`) in the Supabase SQL editor. That creates `profiles`, `generations`, and `purchases`, the signup trigger, RLS, and the `ads` storage bucket.
 
 Stripe webhook: `https://your-domain/api/webhook/stripe`.
 

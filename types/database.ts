@@ -14,6 +14,7 @@ export interface Database {
           id: string
           email: string
           credits: number
+          stripe_customer_id: string | null
           created_at: string
           updated_at: string
         }
@@ -21,71 +22,70 @@ export interface Database {
           id: string
           email: string
           credits?: number
+          stripe_customer_id?: string | null
           created_at?: string
           updated_at?: string
         }
         Update: {
           email?: string
           credits?: number
+          stripe_customer_id?: string | null
           updated_at?: string
         }
         Relationships: []
       }
-      ads: {
+      generations: {
         Row: {
           id: string
           user_id: string
+          status: string
           product_name: string
           product_description: string
-          audience: string
+          target_audience: string
           style: string
           product_image_path: string
-          script: Json | null
-          video_path: string | null
-          voice_path: string | null
-          final_path: string | null
-          status: string
-          error: string | null
-          credit_deducted: boolean
+          script: string | null
+          video_url: string | null
+          voiceover_url: string | null
+          final_video_url: string | null
+          error_message: string | null
           created_at: string
           updated_at: string
         }
         Insert: {
           id?: string
           user_id: string
+          status?: string
           product_name: string
           product_description: string
-          audience: string
+          target_audience: string
           style: string
           product_image_path: string
-          script?: Json | null
-          video_path?: string | null
-          voice_path?: string | null
-          final_path?: string | null
-          status?: string
-          error?: string | null
-          credit_deducted?: boolean
+          script?: string | null
+          video_url?: string | null
+          voiceover_url?: string | null
+          final_video_url?: string | null
+          error_message?: string | null
           created_at?: string
           updated_at?: string
         }
         Update: {
+          status?: string
           product_name?: string
           product_description?: string
-          audience?: string
+          target_audience?: string
           style?: string
           product_image_path?: string
-          script?: Json | null
-          video_path?: string | null
-          voice_path?: string | null
-          final_path?: string | null
-          status?: string
-          error?: string | null
-          credit_deducted?: boolean
+          script?: string | null
+          video_url?: string | null
+          voiceover_url?: string | null
+          final_video_url?: string | null
+          error_message?: string | null
           updated_at?: string
         }
         Relationships: [
           {
-            foreignKeyName: "ads_user_id_fkey"
+            foreignKeyName: "generations_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
@@ -93,34 +93,31 @@ export interface Database {
           },
         ]
       }
-      credit_transactions: {
+      purchases: {
         Row: {
           id: string
           user_id: string
-          amount: number
-          reason: string
-          ad_id: string | null
-          stripe_session_id: string | null
+          stripe_session_id: string
+          credits_purchased: number
+          amount_paid: number
           created_at: string
         }
         Insert: {
           id?: string
           user_id: string
-          amount: number
-          reason: string
-          ad_id?: string | null
-          stripe_session_id?: string | null
+          stripe_session_id: string
+          credits_purchased: number
+          amount_paid: number
           created_at?: string
         }
         Update: {
-          amount?: number
-          reason?: string
-          ad_id?: string | null
-          stripe_session_id?: string | null
+          stripe_session_id?: string
+          credits_purchased?: number
+          amount_paid?: number
         }
         Relationships: [
           {
-            foreignKeyName: "credit_transactions_user_id_fkey"
+            foreignKeyName: "purchases_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
@@ -136,9 +133,6 @@ export interface Database {
       apply_credit_delta: {
         Args: {
           p_delta: number
-          p_reason: string
-          p_ad_id?: string | null
-          p_stripe_session_id?: string | null
         }
         Returns: Database["public"]["Tables"]["profiles"]["Row"]
       }

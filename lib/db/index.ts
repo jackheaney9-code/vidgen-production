@@ -2,10 +2,12 @@ import { hasSupabase, isDemoMode } from "@/lib/env";
 import {
   fileCreateAd,
   fileCreateProfile,
+  fileCreatePurchase,
   fileGetAd,
   fileGetProfile,
   fileGetProfileByEmail,
   fileListAds,
+  fileListPurchases,
   fileListTransactions,
   fileUpdateAd,
   fileUpdateCredits,
@@ -16,11 +18,12 @@ import {
   supabaseGetAd,
   supabaseGetProfile,
   supabaseListAds,
+  supabaseListPurchases,
   supabaseListTransactions,
   supabaseUpdateAd,
   supabaseUpdateCredits,
 } from "@/lib/db/supabase-store";
-import type { Ad, CreditTransaction, Profile } from "@/types";
+import type { Ad, CreditTransaction, Profile, Purchase } from "@/types";
 
 export function usesFileStore(): boolean {
   return isDemoMode() || !hasSupabase();
@@ -59,7 +62,7 @@ export async function updateCredits(
   if (usesFileStore()) {
     return fileUpdateCredits(userId, delta, reason, adId, stripeSessionId);
   }
-  return supabaseUpdateCredits(userId, delta, reason, adId, stripeSessionId);
+  return supabaseUpdateCredits(userId, delta);
 }
 
 export async function listAds(userId: string): Promise<Ad[]> {
@@ -97,4 +100,18 @@ export async function listTransactions(
     return fileListTransactions(userId);
   }
   return supabaseListTransactions(userId);
+}
+
+export async function createPurchase(purchase: Purchase): Promise<Purchase> {
+  if (usesFileStore()) {
+    return fileCreatePurchase(purchase);
+  }
+  throw new Error("Purchases are written by the Stripe webhook in production.");
+}
+
+export async function listPurchases(userId: string): Promise<Purchase[]> {
+  if (usesFileStore()) {
+    return fileListPurchases(userId);
+  }
+  return supabaseListPurchases(userId);
 }

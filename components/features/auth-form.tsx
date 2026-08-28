@@ -8,49 +8,78 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { createBrowserClient } from "@/lib/supabase/client"
+import { hasSupabase } from "@/lib/env"
 
-export function AuthForm({ mode }: { mode: "login" | "signup" }) {
+export function AuthForm() {
   const router = useRouter()
   const search = useSearchParams()
   const next = search.get("next") ?? "/dashboard"
+  const authError = search.get("error")
   const [email, setEmail] = useState("")
-  const [password, setPassword] = useState("")
-  const [error, setError] = useState<string | null>(null)
-  const [pending, setPending] = useState(false)
-  const [demoPending, setDemoPending] = useState(false)
+  const [error, setError] = useState<string | null>(
+    authError === "auth" ? "Sign-in didn’t complete. Try again." : null,
+  )
+  const [notice, setNotice] = useState<string | null>(null)
+  const [pending, setPending] = useState<"google" | "magic" | "demo" | null>(null)
+  const supabaseReady = hasSupabase()
 
-  async function submit(event: React.FormEvent) {
-    event.preventDefault()
-    setPending(true)
+  async function google() {
+    if (!supabaseReady) {
+      setError("Add Supabase keys to enable Google sign-in.")
+      return
+    }
+    setPending("google")
     setError(null)
     try {
-      const res = await fetch(mode === "login" ? "/api/auth/login" : "/api/auth/signup", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+      const supabase = createBrowserClient()
+      const origin = window.location.origin
+      const { error: oauthError } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: `${origin}/callback?next=${encodeURIComponent(next)}`,
+        },
       })
-      const data: unknown = await res.json()
-      if (!res.ok) {
-        const message =
-          typeof data === "object" &&
-          data !== null &&
-          "error" in data &&
-          typeof data.error === "string"
-            ? data.error
-            : "Could not continue"
-        throw new Error(message)
+      if (oauthError) {
+        throw oauthError
       }
-      router.push(next)
-      router.refresh()
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not continue")
+      setError(err instanceof Error ? err.message : "Google sign-in failed")
+      setPending(null)
+    }
+  }
+
+  async function magicLink(event: React.FormEvent) {
+    event.preventDefault()
+    if (!supabaseReady) {
+      setError("Add Supabase keys to send a magic link, or use the demo studio.")
+      return
+    }
+    setPending("magic")
+    setError(null)
+    setNotice(null)
+    try {
+      const supabase = createBrowserClient()
+      const origin = window.location.origin
+      const { error: otpError } = await supabase.auth.signInWithOtp({
+        email,
+        options: {
+          emailRedirectTo: `${origin}/callback?next=${encodeURIComponent(next)}`,
+        },
+      })
+      if (otpError) {
+        throw otpError
+      }
+      setNotice(`Check ${email} for a sign-in link.`)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not send the link")
     } finally {
-      setPending(false)
+      setPending(null)
     }
   }
 
   async function demo() {
-    setDemoPending(true)
+    setPending("demo")
     setError(null)
     try {
       const res = await fetch("/api/auth/demo", { method: "POST" })
@@ -70,7 +99,7 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
     } catch (err) {
       setError(err instanceof Error ? err.message : "Demo studio failed")
     } finally {
-      setDemoPending(false)
+      setPending(null)
     }
   }
 
@@ -82,7 +111,27 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       )}
-      <form onSubmit={submit} className="space-y-4">
+      {notice && (
+        <Alert>
+          <AlertTitle>Link sent</AlertTitle>
+          <AlertDescription>{notice}</AlertDescription>
+        </Alert>
+      )}
+      <Button
+        type="button"
+        className="h-10 w-full"
+        onClick={google}
+        disabled={pending !== null}
+      >
+        {pending === "google" && <Loader2Icon className="animate-spin" />}
+        Continue with Google
+      </Button>
+      <div className="flex items-center gap-3 text-xs text-muted-foreground">
+        <span className="h-px flex-1 bg-border" />
+        or email a link
+        <span className="h-px flex-1 bg-border" />
+      </div>
+      <form onSubmit={magicLink} className="space-y-4">
         <div className="space-y-2">
           <Label htmlFor="email">Email</Label>
           <Input
@@ -95,36 +144,23 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
             className="h-10"
           />
         </div>
-        <div className="space-y-2">
-          <Label htmlFor="password">Password</Label>
-          <Input
-            id="password"
-            type="password"
-            autoComplete={mode === "login" ? "current-password" : "new-password"}
-            minLength={8}
-            required
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            className="h-10"
-          />
-        </div>
-        <Button type="submit" className="h-10 w-full" disabled={pending}>
-          {pending && <Loader2Icon className="animate-spin" />}
-          {mode === "login" ? "Sign in" : "Create studio"}
+        <Button type="submit" variant="outline" className="h-10 w-full" disabled={pending !== null}>
+          {pending === "magic" && <Loader2Icon className="animate-spin" />}
+          Send magic link
         </Button>
       </form>
       <Button
         type="button"
-        variant="outline"
+        variant="ghost"
         className="h-10 w-full"
         onClick={demo}
-        disabled={demoPending}
+        disabled={pending !== null}
       >
-        {demoPending && <Loader2Icon className="animate-spin" />}
+        {pending === "demo" && <Loader2Icon className="animate-spin" />}
         Continue with a demo studio
       </Button>
       <p className="text-center text-xs text-muted-foreground">
-        Demo studios start with 3 credits. No API keys required.
+        New Google and magic-link accounts get 3 credits. Demo mode works without Supabase.
       </p>
     </div>
   )

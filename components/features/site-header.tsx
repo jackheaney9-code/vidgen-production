@@ -37,7 +37,7 @@ export function SiteHeader({ signedIn }: { signedIn: boolean }) {
               <Link href="/login" className={cn(buttonVariants({ variant: "ghost" }))}>
                 Sign in
               </Link>
-              <Link href="/signup" className={cn(buttonVariants())}>
+              <Link href="/login" className={cn(buttonVariants())}>
                 Start a studio
               </Link>
             </>
@@ -65,7 +65,7 @@ export function SiteHeader({ signedIn }: { signedIn: boolean }) {
                 Pricing
               </Link>
               <Link
-                href={signedIn ? "/dashboard" : "/signup"}
+                href={signedIn ? "/dashboard" : "/login"}
                 className={cn(buttonVariants(), "mt-4")}
                 onClick={() => setOpen(false)}
               >

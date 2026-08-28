@@ -16,7 +16,7 @@ import { cn } from "@/lib/utils"
 
 export function AdCreateForm() {
   const router = useRouter()
-  const [style, setStyle] = useState<AdStyle>("cinematic")
+  const [style, setStyle] = useState<AdStyle>("showcase")
   const [preview, setPreview] = useState<string | null>(null)
   const [useSample, setUseSample] = useState(false)
   const [error, setError] = useState<string | null>(null)

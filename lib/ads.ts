@@ -33,7 +33,7 @@ export async function createAdFromForm(formData: FormData): Promise<Ad> {
     videoPath: null,
     voicePath: null,
     finalPath: null,
-    status: "draft",
+    status: "pending",
     error: null,
     creditDeducted: false,
     createdAt: now,
@@ -57,7 +57,7 @@ export async function saveScriptForAd(
   }
   return updateAd(adId, {
     script: parsed.data,
-    status: "script_ready",
+    status: "pending",
     error: null,
   });
 }

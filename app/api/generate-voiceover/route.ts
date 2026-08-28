@@ -29,7 +29,7 @@ export async function POST(request: Request) {
       return jsonError("A script is required for voiceover.", 400);
     }
 
-    await updateAd(ad.id, { status: "voice_pending", error: null });
+    await updateAd(ad.id, { status: "generating_voice", error: null });
 
     try {
       const relative = `${ad.id}/voice.m4a`;
@@ -42,7 +42,7 @@ export async function POST(request: Request) {
       const stored = await saveUserFile(ad.userId, relative, bytes);
       const updated = await updateAd(ad.id, {
         voicePath: stored,
-        status: "voice_ready",
+        status: "generating_voice",
         error: null,
       });
       return jsonOk({ ad: updated });

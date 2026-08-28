@@ -5,15 +5,12 @@ import { STYLE_META } from "@/lib/constants"
 import type { Ad } from "@/types"
 
 const STATUS_LABEL: Record<Ad["status"], string> = {
-  draft: "Draft",
-  script_pending: "Writing",
-  script_ready: "Script ready",
-  video_pending: "Filming",
-  video_ready: "Picture ready",
-  voice_pending: "Voice",
-  voice_ready: "Voice ready",
+  pending: "Ready to produce",
+  generating_script: "Writing",
+  generating_video: "Filming",
+  generating_voice: "Voice",
   compositing: "Composite",
-  complete: "Ready",
+  completed: "Ready",
   failed: "Failed",
 }
 

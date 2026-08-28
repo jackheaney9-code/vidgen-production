@@ -3,7 +3,7 @@ import { z } from "zod";
 import { jsonError, jsonFromUnknown, jsonOk } from "@/lib/http";
 import { getEnv, hasStripe, hasSupabase, isDemoMode } from "@/lib/env";
 import { getStripe } from "@/lib/stripe";
-import { updateCredits } from "@/lib/db";
+import { createPurchase, updateCredits } from "@/lib/db";
 import { createSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -41,6 +41,7 @@ export async function POST(request: Request) {
       if (!Number.isFinite(credits) || credits <= 0) {
         return jsonError("Invalid credit amount", 400);
       }
+      const amountPaid = session.amount_total ?? 0;
       if (isDemoMode() || !hasSupabase()) {
         await updateCredits(
           parsed.data.userId,
@@ -49,6 +50,14 @@ export async function POST(request: Request) {
           null,
           session.id,
         );
+        await createPurchase({
+          id: crypto.randomUUID(),
+          userId: parsed.data.userId,
+          stripeSessionId: session.id,
+          creditsPurchased: credits,
+          amountPaid,
+          createdAt: new Date().toISOString(),
+        });
       } else {
         const admin = createSupabaseAdmin();
         const { data: profile, error: profileError } = await admin
@@ -70,14 +79,14 @@ export async function POST(request: Request) {
         if (updateError) {
           throw new Error(updateError.message);
         }
-        const { error: txError } = await admin.from("credit_transactions").insert({
+        const { error: purchaseError } = await admin.from("purchases").insert({
           user_id: parsed.data.userId,
-          amount: credits,
-          reason: `stripe_purchase_${parsed.data.pack}`,
           stripe_session_id: session.id,
+          credits_purchased: credits,
+          amount_paid: amountPaid,
         });
-        if (txError) {
-          throw new Error(txError.message);
+        if (purchaseError) {
+          throw new Error(purchaseError.message);
         }
       }
     }

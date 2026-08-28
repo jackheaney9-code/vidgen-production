@@ -21,7 +21,7 @@ export async function POST(request: Request) {
     }
 
     const ad = await loadOwnedAd(parsed.data.adId);
-    await updateAd(ad.id, { status: "script_pending", error: null });
+    await updateAd(ad.id, { status: "generating_script", error: null });
 
     try {
       const script = await generateAdScript({
@@ -32,7 +32,7 @@ export async function POST(request: Request) {
       });
       const updated = await updateAd(ad.id, {
         script,
-        status: "script_ready",
+        status: "pending",
         error: null,
       });
       return jsonOk({ ad: updated });
