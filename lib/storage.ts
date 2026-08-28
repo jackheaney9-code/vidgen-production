@@ -118,6 +118,12 @@ export async function readMediaBytes(source: string): Promise<Buffer> {
     }
     return Buffer.from(await res.arrayBuffer());
   }
+  if (source.startsWith("/api/media/")) {
+    return readFile(resolveLocalPath(source));
+  }
+  if (path.isAbsolute(source)) {
+    return readFile(source);
+  }
   return readFile(resolveLocalPath(source));
 }
 
