@@ -1,3 +1,5 @@
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import { mkdir, writeFile } from "fs/promises";
 import os from "node:os";
 import path from "path";
@@ -9,6 +11,8 @@ import {
   readMediaBytes,
   savePipelineFile,
 } from "@/lib/storage";
+
+const execFileAsync = promisify(execFile);
 
 export async function compositeVideo(
   videoUrl: string,
@@ -24,61 +28,95 @@ export async function compositeVideo(
   await writeFile(videoPath, await readMediaBytes(videoUrl));
   await writeFile(audioPath, await readMediaBytes(audioUrl));
 
-  try {
-    await runCommand(
-      "ffmpeg",
-      [
-        "-y",
-        "-i",
-        videoPath,
-        "-i",
-        audioPath,
-        "-c:v",
-        "copy",
-        "-c:a",
-        "aac",
-        "-shortest",
-        outputPath,
-      ],
-      120_000,
-    );
-  } catch {
-    await runCommand(
-      "ffmpeg",
-      [
-        "-y",
-        "-stream_loop",
-        "-1",
-        "-i",
-        videoPath,
-        "-i",
-        audioPath,
-        "-map",
-        "0:v:0",
-        "-map",
-        "1:a:0",
-        "-c:v",
-        "libx264",
-        "-preset",
-        "veryfast",
-        "-crf",
-        "20",
-        "-c:a",
-        "aac",
-        "-b:a",
-        "192k",
-        "-shortest",
-        "-movflags",
-        "+faststart",
-        "-pix_fmt",
-        "yuv420p",
-        outputPath,
-      ],
-      120_000,
-    );
+  const videoSeconds = await probeDuration(videoPath);
+  const audioSeconds = await probeDuration(audioPath);
+  const audioLonger = audioSeconds > videoSeconds + 0.2;
+
+  if (audioLonger) {
+    await loopVideoToAudio(videoPath, audioPath, outputPath);
+  } else {
+    try {
+      await runCommand(
+        "ffmpeg",
+        [
+          "-y",
+          "-i",
+          videoPath,
+          "-i",
+          audioPath,
+          "-c:v",
+          "copy",
+          "-c:a",
+          "aac",
+          "-shortest",
+          outputPath,
+        ],
+        120_000,
+      );
+    } catch {
+      await loopVideoToAudio(videoPath, audioPath, outputPath);
+    }
   }
 
   const bytes = await readMediaBytes(outputPath);
   const stored = await savePipelineFile("final.mp4", bytes);
   return getSignedMediaUrl(stored.objectPath, SIGNED_URL_TTL_SECONDS);
+}
+
+async function loopVideoToAudio(
+  videoPath: string,
+  audioPath: string,
+  outputPath: string,
+): Promise<void> {
+  await runCommand(
+    "ffmpeg",
+    [
+      "-y",
+      "-stream_loop",
+      "-1",
+      "-i",
+      videoPath,
+      "-i",
+      audioPath,
+      "-map",
+      "0:v:0",
+      "-map",
+      "1:a:0",
+      "-c:v",
+      "libx264",
+      "-preset",
+      "veryfast",
+      "-crf",
+      "20",
+      "-c:a",
+      "aac",
+      "-b:a",
+      "192k",
+      "-shortest",
+      "-movflags",
+      "+faststart",
+      "-pix_fmt",
+      "yuv420p",
+      outputPath,
+    ],
+    120_000,
+  );
+}
+
+async function probeDuration(filePath: string): Promise<number> {
+  try {
+    const { stdout } = await execFileAsync("ffprobe", [
+      "-v",
+      "error",
+      "-show_entries",
+      "format=duration",
+      "-of",
+      "csv=p=0",
+      filePath,
+    ]);
+    const value = Number(stdout.trim());
+    return Number.isFinite(value) ? value : 0;
+  } catch {
+    return 0;
+  }
 }
