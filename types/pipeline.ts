@@ -6,11 +6,20 @@ export type PipelineStep =
   | "voiceover"
   | "composite"
 
+export interface ScriptInput {
+  productName: string
+  productDescription: string
+  targetAudience: string
+  style: AdStyle
+  duration: 15 | 30
+}
+
 export interface ScriptJobInput {
   productName: string
   productDescription: string
   audience: string
   style: AdStyle
+  duration?: 15 | 30
 }
 
 export interface VideoJobInput {

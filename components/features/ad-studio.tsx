@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
 import { CheckIcon, Loader2Icon, CircleAlertIcon } from "lucide-react"
 
@@ -31,7 +31,13 @@ const STEP_LABEL: Record<ProduceStep, string> = {
   done: "Ready to ship",
 }
 
-export function AdStudio({ initial }: { initial: StudioPayload }) {
+export function AdStudio({
+  initial,
+  autoProduce = false,
+}: {
+  initial: StudioPayload
+  autoProduce?: boolean
+}) {
   const [payload, setPayload] = useState(initial)
   const [script, setScript] = useState<AdScript | null>(initial.ad.script)
   const [busy, setBusy] = useState<ProduceStep | null>(
@@ -44,11 +50,21 @@ export function AdStudio({ initial }: { initial: StudioPayload }) {
   const [error, setError] = useState<string | null>(initial.ad.error)
   const [payment, setPayment] = useState(false)
 
+  const started = useRef(false)
+
   const ad = payload.ad
 
   useEffect(() => {
+    if (started.current) {
+      return
+    }
+    started.current = true
     if (ad.status === "pending" && !ad.script) {
       void runScript()
+      return
+    }
+    if (autoProduce && ad.script && !ad.finalPath) {
+      void produce()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])

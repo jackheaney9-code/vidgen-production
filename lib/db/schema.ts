@@ -72,8 +72,21 @@ export const purchaseSchema = z.object({
   createdAt: z.string(),
 });
 
+export const scriptInputSchema = z.object({
+  productName: z.string().trim().min(2, "Name the product."),
+  productDescription: z.string().trim().min(8, "Describe the product."),
+  targetAudience: z.string().trim().min(2, "Who is this for?"),
+  style: adStyleSchema,
+  duration: z.coerce
+    .number()
+    .refine((value): value is 15 | 30 => value === 15 || value === 30, {
+      message: "Choose 15 or 30 seconds.",
+    }),
+});
+
 export const generateBodySchema = z.object({
   adId: z.string().min(1),
+  duration: z.union([z.literal(15), z.literal(30)]).optional(),
 });
 
 export const scriptUpdateSchema = z.object({

@@ -106,6 +106,7 @@ export type {
   CompositeJobInput,
   PipelineResult,
   PipelineStep,
+  ScriptInput,
   ScriptJobInput,
   VideoJobInput,
   VoiceJobInput,

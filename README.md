@@ -47,7 +47,7 @@ Protected app routes live under `/app/(app)` and send unauthenticated users to `
 
 ## Pipeline
 
-1. `POST /api/generate-script` — Claude (or mock) writes the ad
+1. `POST /api/generate-script` — Claude writes HOOK / BODY / CTA (free, no credit)
 2. You edit and approve the script
 3. `POST /api/generate-video` — deducts 1 credit, then Runway (or ffmpeg)
 4. `POST /api/generate-voiceover` — ElevenLabs (or espeak-ng)

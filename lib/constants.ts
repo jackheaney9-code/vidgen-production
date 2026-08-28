@@ -7,7 +7,7 @@ export const STYLE_META: Record<
   { label: string; description: string }
 > = {
   showcase: {
-    label: "Showcase",
+    label: "Product Showcase",
     description: "Hero product, studio light, slow orbit.",
   },
   lifestyle: {
@@ -15,7 +15,7 @@ export const STYLE_META: Record<
     description: "In someone’s hands, real rooms, lived-in light.",
   },
   before_after: {
-    label: "Before / after",
+    label: "Before/After",
     description: "The problem, then the product, then the proof.",
   },
 };

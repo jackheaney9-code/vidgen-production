@@ -1,4 +1,6 @@
 import type { AdStyle } from "@/types";
+import type { ScriptInput } from "@/types/pipeline";
+import { formatScriptText, visualPromptFor } from "@/lib/pipeline/script-format";
 
 export function buildScriptPrompt(input: {
   productName: string;
@@ -32,52 +34,69 @@ Rules:
 - visualPrompt must keep the uploaded product recognizable`;
 }
 
+export function mockScriptText(input: ScriptInput): string {
+  const copy = mockCopy(input);
+  return formatScriptText(copy);
+}
+
 export function mockScript(input: {
   productName: string;
   productDescription: string;
   audience: string;
   style: AdStyle;
+  duration?: 15 | 30;
 }) {
-  const name = input.productName;
-  const audience = input.audience;
-  const benefit = firstSentence(input.productDescription);
-
-  const byStyle: Record<
-    AdStyle,
-    { hook: string; body: string; cta: string; visual: string }
-  > = {
-    showcase: {
-      hook: `Look closer. This is ${name}.`,
-      body: `${benefit} Built for ${audience.toLowerCase()} who notice the details.`,
-      cta: `${name}. See it in motion.`,
-      visual: `Showcase 9:16 studio commercial of ${name}, slow camera orbit, crisp rim light, seamless backdrop, product hero, commercial grade`,
-    },
-    lifestyle: {
-      hook: `This is what the morning looks like now.`,
-      body: `${name}. ${benefit} For ${audience.toLowerCase()} who want it in the real world, not a lightbox.`,
-      cta: `Bring ${name} home.`,
-      visual: `Lifestyle 9:16 of ${name} in a lived-in apartment, natural window light, hands using the product, warm documentary commercial`,
-    },
-    before_after: {
-      hook: `You already know the before.`,
-      body: `After ${name}: ${benefit} That's the difference ${audience.toLowerCase()} feel.`,
-      cta: `Start the after. Get ${name}.`,
-      visual: `Before-and-after 9:16 commercial of ${name}, split energy from dull to radiant, then hold on the product, clean social ad`,
-    },
-  };
-
-  const copy = byStyle[input.style];
+  const duration = input.duration === 30 ? 30 : 15;
+  const copy = mockCopy({
+    productName: input.productName,
+    productDescription: input.productDescription,
+    targetAudience: input.audience,
+    style: input.style,
+    duration,
+  });
   const fullText = `${copy.hook} ${copy.body} ${copy.cta}`;
-
   return {
     hook: copy.hook,
     body: copy.body,
     cta: copy.cta,
     fullText,
-    visualPrompt: copy.visual,
-    onScreenText: [copy.hook, name, copy.cta],
-    durationSeconds: 18,
+    visualPrompt: visualPromptFor(input.productName, input.style),
+    onScreenText: [copy.hook, input.productName, copy.cta],
+    durationSeconds: duration,
   };
+}
+
+function mockCopy(input: ScriptInput) {
+  const name = input.productName;
+  const audience = input.targetAudience;
+  const benefit = firstSentence(input.productDescription);
+  const extra =
+    input.duration === 30
+      ? ` Give it a week. You'll feel the difference ${audience.toLowerCase()} talk about.`
+      : "";
+
+  const byStyle: Record<
+    AdStyle,
+    { hook: string; body: string; cta: string }
+  > = {
+    showcase: {
+      hook: `Look closer. This is ${name}.`,
+      body: `${benefit} Built for ${audience.toLowerCase()} who notice the details.${extra}`,
+      cta: `${name}. See it in motion.`,
+    },
+    lifestyle: {
+      hook: `This is what the morning looks like now.`,
+      body: `${name}. ${benefit} For ${audience.toLowerCase()} who want it in the real world, not a lightbox.${extra}`,
+      cta: `Bring ${name} home.`,
+    },
+    before_after: {
+      hook: `You already know the before.`,
+      body: `After ${name}: ${benefit} That's the difference ${audience.toLowerCase()} feel.${extra}`,
+      cta: `Start the after. Get ${name}.`,
+    },
+  };
+
+  return byStyle[input.style];
 }
 
 function firstSentence(text: string): string {
