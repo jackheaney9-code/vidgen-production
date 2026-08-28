@@ -5,7 +5,8 @@ AI video ad generator. Drop a product still, approve a 15–30 second script, th
 ## Architecture
 
 - `/app/(marketing)` — landing
-- `/app/(app)` — protected dashboard, create, billing (redirects to `/login` if signed out)
+- `/app/(app)` — protected dashboard, create, billing, generation results (redirects to `/login` if signed out)
+- `/app/(app)/generations/[id]` — video player, download, script, and live progress
 - `/app/(auth)/login` — Google OAuth and email magic link
 - `/app/(auth)/callback` — OAuth / magic-link code exchange
 - `/app/api` — generate-script, generate-video, generate-voiceover, composite, Stripe webhook

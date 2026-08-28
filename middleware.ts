@@ -7,7 +7,9 @@ import { updateSupabaseSession } from "@/lib/supabase/middleware";
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const isApp =
-    pathname.startsWith("/dashboard") || pathname.startsWith("/create");
+    pathname.startsWith("/dashboard") ||
+    pathname.startsWith("/create") ||
+    pathname.startsWith("/generations");
   if (!isApp) {
     return NextResponse.next();
   }
@@ -32,5 +34,12 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/dashboard", "/dashboard/:path*", "/create", "/create/:path*"],
+  matcher: [
+    "/dashboard",
+    "/dashboard/:path*",
+    "/create",
+    "/create/:path*",
+    "/generations",
+    "/generations/:path*",
+  ],
 };

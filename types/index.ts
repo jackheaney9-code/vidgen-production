@@ -101,6 +101,7 @@ export interface CreditPack {
   envPriceId?: string;
 }
 
+export type { GenerationListItem } from "@/types/generation";
 export type { Database, Json } from "@/types/database";
 export type {
   CompositeJobInput,

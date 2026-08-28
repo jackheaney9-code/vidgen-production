@@ -1,9 +1,6 @@
-import { notFound } from "next/navigation"
+import { redirect } from "next/navigation"
 
-import { AdStudio } from "@/components/features/ad-studio"
-import { getAdPayload } from "@/lib/ads"
-
-export default async function AdDetailPage({
+export default async function LegacyAdDetailPage({
   params,
   searchParams,
 }: {
@@ -12,18 +9,6 @@ export default async function AdDetailPage({
 }) {
   const { id } = await params
   const { produce } = await searchParams
-  try {
-    const payload = await getAdPayload(id)
-    return (
-      <div className="space-y-8">
-        <div>
-          <p className="text-xs tracking-[0.2em] text-primary uppercase">Studio</p>
-          <h1 className="mt-2 font-heading text-4xl">{payload.ad.productName}</h1>
-        </div>
-        <AdStudio initial={payload} autoProduce={produce === "1"} />
-      </div>
-    )
-  } catch {
-    notFound()
-  }
+  const query = produce ? `?produce=${encodeURIComponent(produce)}` : ""
+  redirect(`/generations/${id}${query}`)
 }

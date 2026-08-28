@@ -36,6 +36,12 @@ export function DashboardHeader({
         <Logo />
         <div className="flex items-center gap-2">
           <CreditBalance initialCredits={credits} />
+          <Link
+            href="/dashboard/billing"
+            className={cn(buttonVariants({ variant: "outline" }), "hidden sm:inline-flex")}
+          >
+            Buy Credits
+          </Link>
           <Link href="/create" className={cn(buttonVariants())}>
             New ad
           </Link>

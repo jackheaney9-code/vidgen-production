@@ -110,7 +110,7 @@ export function AdCreateForm() {
       if (!saved.ok) {
         throw new Error(saved.error)
       }
-      router.push(`/dashboard/ads/${generationId}?produce=1`)
+      router.push(`/generations/${generationId}?produce=1`)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Couldn’t save the script.")
       setPending(null)
