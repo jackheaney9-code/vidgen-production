@@ -1,0 +1,38 @@
+import { type NextRequest, NextResponse } from "next/server";
+
+import { SESSION_COOKIE } from "@/lib/constants";
+import { hasSupabase, isDemoMode } from "@/lib/env";
+import { updateSupabaseSession } from "@/lib/supabase/middleware";
+
+export async function middleware(request: NextRequest) {
+  const { pathname } = request.nextUrl;
+  const isDashboard = pathname.startsWith("/dashboard");
+  if (!isDashboard) {
+    return NextResponse.next();
+  }
+
+  if (!isDemoMode() && hasSupabase()) {
+    const response = await updateSupabaseSession(request);
+    const hasAuth = request.cookies
+      .getAll()
+      .some((cookie) => cookie.name.startsWith("sb-"));
+    if (!hasAuth) {
+      const login = new URL("/login", request.url);
+      login.searchParams.set("next", pathname);
+      return NextResponse.redirect(login);
+    }
+    return response;
+  }
+
+  const session = request.cookies.get(SESSION_COOKIE)?.value;
+  if (!session) {
+    const login = new URL("/login", request.url);
+    login.searchParams.set("next", pathname);
+    return NextResponse.redirect(login);
+  }
+  return NextResponse.next();
+}
+
+export const config = {
+  matcher: ["/dashboard/:path*"],
+};
