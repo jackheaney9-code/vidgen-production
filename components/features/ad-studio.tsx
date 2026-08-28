@@ -10,6 +10,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Input } from "@/components/ui/input"
+import { Progress } from "@/components/ui/progress"
 import { cn } from "@/lib/utils"
 import type { Ad, AdScript } from "@/types"
 
@@ -110,31 +111,24 @@ export function AdStudio({
   async function produce() {
     setError(null)
     setPayment(false)
+    setBusy("video")
+    const poll = window.setInterval(() => {
+      void refresh().then((next) => {
+        if (!next) return
+        setBusy(busyFromStatus(next.ad.status))
+      })
+    }, 1500)
     try {
-      let current = payload.ad
-      if (!current.videoPath) {
-        setBusy("video")
-        await postJson("/api/generate-video", { adId: ad.id })
-        const next = await refresh()
-        if (next) current = next.ad
-      }
-      if (!current.voicePath) {
-        setBusy("voice")
-        await postJson("/api/generate-voiceover", { adId: ad.id })
-        const next = await refresh()
-        if (next) current = next.ad
-      }
-      if (!current.finalPath) {
-        setBusy("composite")
-        await postJson("/api/composite", { adId: ad.id })
-        await refresh()
-      }
-      setBusy("done")
+      await postJson("/api/generate-video", { generationId: ad.id, adId: ad.id })
+      const next = await refresh()
+      setBusy(next?.ad.status === "completed" ? "done" : null)
     } catch (err) {
       handleErr(err)
       await refresh()
+      setBusy(null)
     } finally {
-      setTimeout(() => setBusy(null), 400)
+      window.clearInterval(poll)
+      setTimeout(() => setBusy((current) => (current === "done" ? null : current)), 800)
     }
   }
 
@@ -201,9 +195,16 @@ export function AdStudio({
         )}
 
         {busy && (
-          <div className="flex items-center gap-3 rounded-xl border border-white/8 bg-card p-4 text-sm">
-            <Loader2Icon className="size-4 animate-spin text-primary" />
-            {STEP_LABEL[busy]}
+          <div className="space-y-3 rounded-xl border border-white/8 bg-card p-4">
+            <div className="flex items-center gap-3 text-sm">
+              <Loader2Icon className="size-4 animate-spin text-primary" />
+              {STEP_LABEL[busy]}
+            </div>
+            <Progress value={progressFromStatus(ad.status, busy)} className="w-full">
+              <span className="text-xs text-muted-foreground">
+                This usually takes 1–2 minutes.
+              </span>
+            </Progress>
           </div>
         )}
 
@@ -246,6 +247,8 @@ export function AdStudio({
               <Button type="button" onClick={produce} disabled={!canProduce}>
                 {busy && busy !== "done" ? (
                   <Loader2Icon className="animate-spin" />
+                ) : ad.status === "completed" ? (
+                  "Produce again"
                 ) : (
                   "Produce video ad"
                 )}
@@ -343,6 +346,23 @@ function PipelineRail({
   )
 }
 
+function busyFromStatus(status: Ad["status"]): ProduceStep | null {
+  if (status === "generating_script") return "script"
+  if (status === "generating_video") return "video"
+  if (status === "generating_voice") return "voice"
+  if (status === "compositing") return "composite"
+  if (status === "completed") return "done"
+  return "video"
+}
+
+function progressFromStatus(status: Ad["status"], busy: ProduceStep): number {
+  if (status === "completed" || busy === "done") return 100
+  if (status === "compositing" || busy === "composite") return 80
+  if (status === "generating_voice" || busy === "voice") return 55
+  if (status === "generating_video" || busy === "video") return 30
+  return 12
+}
+
 class PaymentRequiredError extends Error {
   constructor(message: string) {
     super(message)
@@ -350,7 +370,10 @@ class PaymentRequiredError extends Error {
   }
 }
 
-async function postJson(url: string, body: { adId: string }): Promise<void> {
+async function postJson(
+  url: string,
+  body: { adId?: string; generationId?: string },
+): Promise<void> {
   const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },

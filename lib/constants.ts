@@ -64,6 +64,8 @@ export const ALLOWED_IMAGE_TYPES = [
 ] as const;
 
 export const SESSION_COOKIE = "lumina_session";
+export const SIGNED_URL_TTL_SECONDS = 7 * 24 * 60 * 60;
+export const PIPELINE_TIMEOUT_MS = 3 * 60 * 1000;
 
 export function formatUsd(cents: number): string {
   const dollars = cents / 100;

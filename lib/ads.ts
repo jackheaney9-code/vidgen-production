@@ -6,6 +6,7 @@ import { createAd, getAd, updateAd } from "@/lib/db";
 import { HttpError } from "@/lib/errors";
 import { adScriptSchema } from "@/lib/db/schema";
 import { parseGeneratedScript } from "@/lib/pipeline/script-format";
+import { SIGNED_URL_TTL_SECONDS } from "@/lib/constants";
 import { getSignedMediaUrl, saveUserFile } from "@/lib/storage";
 import type { Ad, AdScript, AdStyle } from "@/types";
 import { AD_STYLES } from "@/types";
@@ -140,7 +141,9 @@ export async function getAdPayload(adId: string) {
     productImageUrl: await getSignedMediaUrl(ad.productImagePath),
     videoUrl: ad.videoPath ? await getSignedMediaUrl(ad.videoPath) : null,
     voiceUrl: ad.voicePath ? await getSignedMediaUrl(ad.voicePath) : null,
-    finalUrl: ad.finalPath ? await getSignedMediaUrl(ad.finalPath) : null,
+    finalUrl: ad.finalPath
+      ? await getSignedMediaUrl(ad.finalPath, SIGNED_URL_TTL_SECONDS)
+      : null,
   };
 }
 

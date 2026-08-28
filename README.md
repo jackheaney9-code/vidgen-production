@@ -49,11 +49,16 @@ Protected app routes live under `/app/(app)` and send unauthenticated users to `
 
 1. `POST /api/generate-script` — Claude writes HOOK / BODY / CTA (free, no credit)
 2. You edit and approve the script
-3. `POST /api/generate-video` — deducts 1 credit, then Runway (or ffmpeg)
-4. `POST /api/generate-voiceover` — ElevenLabs (or espeak-ng)
-5. `POST /api/composite` — ffmpeg mux, store MP4, return a signed URL
+3. `POST /api/generate-video` — deducts 1 credit, then Runway picture, ElevenLabs voice, and ffmpeg composite in one request (60–120s). The studio polls `GET /api/ads/:id` (or `GET /api/generate-video?generationId=`) for status.
+4. Failures refund the credit, set status `failed`, and store `error_message`
 
-If picture, voice, or composite fails, the credit is refunded. Generation is blocked with **402** when `credits <= 0`.
+| Step | Function | Provider | Fallback |
+|------|----------|----------|----------|
+| Picture | `generateVideo(imageUrl, prompt)` | Runway Gen-4.5 `image_to_video`, poll up to 3 min | ffmpeg Ken Burns |
+| Voice | `generateVoiceover(script, voiceId?)` | ElevenLabs, Rachel (`21m00Tcm4TlvDq8ikWAM`), stability 0.5 / similarity 0.75 | espeak-ng → mp3 |
+| Composite | `compositeVideo(videoUrl, audioUrl)` | ffmpeg `-c:v copy -c:a aac -shortest` | re-encode + loop video to cover audio |
+
+Credits: `credits < 1` returns **402**. One credit is deducted when picture starts. The final MP4 is stored in the `ads` bucket and returned as a signed URL valid for 7 days.
 
 ## Production env
 

@@ -23,20 +23,18 @@ export interface ScriptJobInput {
 }
 
 export interface VideoJobInput {
-  adId: string
-  productImagePath: string
-  visualPrompt: string
+  imageUrl: string
+  prompt: string
 }
 
 export interface VoiceJobInput {
-  adId: string
-  fullText: string
+  script: string
+  voiceId?: string
 }
 
 export interface CompositeJobInput {
-  adId: string
-  videoPath: string
-  voicePath: string
+  videoUrl: string
+  audioUrl: string
 }
 
 export interface PipelineResult {

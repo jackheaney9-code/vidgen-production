@@ -1,23 +1,18 @@
-import { readFile } from "fs/promises";
-import path from "path";
-
 import { loadOwnedAd } from "@/lib/ads";
-import { refundVideoCredit, requireCredits } from "@/lib/credits";
+import { refundVideoCredit } from "@/lib/credits";
 import { requireUserWithProfile } from "@/lib/auth/require-user";
 import { updateAd } from "@/lib/db";
 import { generateBodySchema } from "@/lib/db/schema";
 import { jsonError, jsonFromUnknown, jsonOk } from "@/lib/http";
+import { runWithPipelineContext } from "@/lib/pipeline/context";
 import { generateVoiceover } from "@/lib/pipeline/voice";
-import { localStorageRoot, saveUserFile } from "@/lib/storage";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
 export async function POST(request: Request) {
   try {
-    const { profile } = await requireUserWithProfile();
-    await requireCredits(profile);
-
+    await requireUserWithProfile();
     const body: unknown = await request.json();
     const parsed = generateBodySchema.safeParse(body);
     if (!parsed.success) {
@@ -32,20 +27,16 @@ export async function POST(request: Request) {
     await updateAd(ad.id, { status: "generating_voice", error: null });
 
     try {
-      const relative = `${ad.id}/voice.m4a`;
-      const outputPath = path.join(localStorageRoot(), ad.userId, relative);
-      await generateVoiceover({
-        text: ad.script.fullText,
-        outputPath,
-      });
-      const bytes = await readFile(outputPath);
-      const stored = await saveUserFile(ad.userId, relative, bytes);
+      const voiceUrl = await runWithPipelineContext(
+        { userId: ad.userId, generationId: ad.id },
+        () => generateVoiceover(ad.script?.fullText ?? ""),
+      );
       const updated = await updateAd(ad.id, {
-        voicePath: stored,
+        voicePath: voiceUrl,
         status: "generating_voice",
         error: null,
       });
-      return jsonOk({ ad: updated });
+      return jsonOk({ ad: updated, url: voiceUrl });
     } catch (error) {
       await refundVideoCredit(ad.id);
       await updateAd(ad.id, {
