@@ -4,6 +4,7 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 
 import { Logo } from "@/components/features/logo"
+import { CreditBalance } from "@/components/features/credit-balance"
 import { Button, buttonVariants } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -34,12 +35,7 @@ export function DashboardHeader({
       <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4">
         <Logo />
         <div className="flex items-center gap-2">
-          <Link
-            href="/dashboard/billing"
-            className={cn(buttonVariants({ variant: "outline" }), "hidden sm:inline-flex")}
-          >
-            {credits} {credits === 1 ? "credit" : "credits"}
-          </Link>
+          <CreditBalance initialCredits={credits} />
           <Link href="/create" className={cn(buttonVariants())}>
             New ad
           </Link>

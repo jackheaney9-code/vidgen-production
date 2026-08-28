@@ -1,9 +1,13 @@
-import { createCheckoutSession, getCreditPack } from "@/lib/stripe";
 import { requireUserWithProfile } from "@/lib/auth/require-user";
+import { createPurchase, updateCredits, updateStripeCustomerId } from "@/lib/db";
 import { checkoutSchema } from "@/lib/db/schema";
-import { createPurchase, updateCredits } from "@/lib/db";
-import { jsonError, jsonFromUnknown, jsonOk } from "@/lib/http";
 import { hasStripe } from "@/lib/env";
+import { jsonError, jsonFromUnknown, jsonOk } from "@/lib/http";
+import {
+  createCheckoutSession,
+  getOrCreateStripeCustomer,
+  resolveCheckoutPrice,
+} from "@/lib/stripe";
 
 export const runtime = "nodejs";
 
@@ -15,7 +19,8 @@ export async function POST(request: Request) {
     if (!parsed.success) {
       return jsonError("Choose a credit pack.", 400);
     }
-    const pack = getCreditPack(parsed.data.pack);
+
+    const { pack, stripePriceId } = await resolveCheckoutPrice(parsed.data.priceId);
 
     if (!hasStripe()) {
       const updated = await updateCredits(
@@ -38,12 +43,23 @@ export async function POST(request: Request) {
       });
     }
 
+    const customerId = await getOrCreateStripeCustomer({
+      profile,
+      email: profile.email,
+      userId: user.id,
+    });
+    if (profile.stripeCustomerId !== customerId) {
+      await updateStripeCustomerId(user.id, customerId);
+    }
+
     const url = await createCheckoutSession({
       userId: user.id,
       email: profile.email,
+      customerId,
       pack,
+      stripePriceId,
     });
-    return jsonOk({ demo: false, url });
+    return jsonOk({ url });
   } catch (error) {
     return jsonFromUnknown(error);
   }

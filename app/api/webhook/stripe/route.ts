@@ -1,98 +1,88 @@
-import { z } from "zod";
+import type Stripe from "stripe";
 
-import { jsonError, jsonFromUnknown, jsonOk } from "@/lib/http";
-import { getEnv, hasStripe, hasSupabase, isDemoMode } from "@/lib/env";
-import { getStripe } from "@/lib/stripe";
-import { createPurchase, updateCredits } from "@/lib/db";
-import { createSupabaseAdmin } from "@/lib/supabase/admin";
+import { getEnv, hasStripe } from "@/lib/env";
+import { jsonError, jsonOk } from "@/lib/http";
+import { getStripe } from "@/lib/stripe/client";
+import { fulfillStripePurchase } from "@/lib/stripe/fulfill";
+import { packFromStripePrice } from "@/lib/stripe/prices";
 
 export const runtime = "nodejs";
 
-const metadataSchema = z.object({
-  userId: z.string().min(1),
-  credits: z.string().min(1),
-  pack: z.string().min(1),
-});
+function customerIdFrom(session: Stripe.Checkout.Session): string | null {
+  if (typeof session.customer === "string") {
+    return session.customer;
+  }
+  if (session.customer && typeof session.customer === "object" && "id" in session.customer) {
+    return session.customer.id;
+  }
+  return null;
+}
+
+async function creditsFromSession(
+  stripe: Stripe,
+  session: Stripe.Checkout.Session,
+): Promise<number> {
+  const expanded = await stripe.checkout.sessions.retrieve(session.id, {
+    expand: ["line_items.data.price"],
+  });
+  const price = expanded.line_items?.data[0]?.price;
+  if (price && typeof price === "object") {
+    const pack = packFromStripePrice(price);
+    if (pack) {
+      return pack.credits;
+    }
+  }
+  const fromMeta = Number.parseInt(session.metadata?.credits ?? "", 10);
+  if (Number.isFinite(fromMeta) && fromMeta > 0) {
+    return fromMeta;
+  }
+  throw new Error("Could not determine which credit pack was purchased.");
+}
 
 export async function POST(request: Request) {
-  try {
-    if (!hasStripe()) {
-      return jsonError("Stripe is not configured", 400);
-    }
-    const stripe = getStripe();
-    const secret = getEnv("STRIPE_WEBHOOK_SECRET");
-    if (!secret) {
-      return jsonError("Stripe webhook secret is missing", 500);
-    }
-    const signature = request.headers.get("stripe-signature");
-    if (!signature) {
-      return jsonError("Missing Stripe signature", 400);
-    }
-    const raw = await request.text();
-    const event = stripe.webhooks.constructEvent(raw, signature, secret);
-
-    if (event.type === "checkout.session.completed") {
-      const session = event.data.object;
-      const parsed = metadataSchema.safeParse(session.metadata);
-      if (!parsed.success) {
-        return jsonError("Checkout metadata missing", 400);
-      }
-      const credits = Number.parseInt(parsed.data.credits, 10);
-      if (!Number.isFinite(credits) || credits <= 0) {
-        return jsonError("Invalid credit amount", 400);
-      }
-      const amountPaid = session.amount_total ?? 0;
-      if (isDemoMode() || !hasSupabase()) {
-        await updateCredits(
-          parsed.data.userId,
-          credits,
-          `stripe_purchase_${parsed.data.pack}`,
-          null,
-          session.id,
-        );
-        await createPurchase({
-          id: crypto.randomUUID(),
-          userId: parsed.data.userId,
-          stripeSessionId: session.id,
-          creditsPurchased: credits,
-          amountPaid,
-          createdAt: new Date().toISOString(),
-        });
-      } else {
-        const admin = createSupabaseAdmin();
-        const { data: profile, error: profileError } = await admin
-          .from("profiles")
-          .select("credits")
-          .eq("id", parsed.data.userId)
-          .single();
-        if (profileError) {
-          throw new Error(profileError.message);
-        }
-        const current = z.number().parse(profile.credits);
-        const { error: updateError } = await admin
-          .from("profiles")
-          .update({
-            credits: current + credits,
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", parsed.data.userId);
-        if (updateError) {
-          throw new Error(updateError.message);
-        }
-        const { error: purchaseError } = await admin.from("purchases").insert({
-          user_id: parsed.data.userId,
-          stripe_session_id: session.id,
-          credits_purchased: credits,
-          amount_paid: amountPaid,
-        });
-        if (purchaseError) {
-          throw new Error(purchaseError.message);
-        }
-      }
-    }
-
-    return jsonOk({ received: true });
-  } catch (error) {
-    return jsonFromUnknown(error);
+  if (!hasStripe()) {
+    return jsonError("Stripe is not configured", 400);
   }
+  const stripe = getStripe();
+  const secret = getEnv("STRIPE_WEBHOOK_SECRET");
+  if (!secret) {
+    return jsonError("Stripe webhook secret is missing", 500);
+  }
+  const signature = request.headers.get("stripe-signature");
+  if (!signature) {
+    return jsonError("Missing Stripe signature", 400);
+  }
+
+  let event: Stripe.Event;
+  try {
+    const raw = await request.text();
+    event = stripe.webhooks.constructEvent(raw, signature, secret);
+  } catch {
+    return jsonError("Invalid Stripe signature", 400);
+  }
+
+  if (event.type === "checkout.session.completed") {
+    const session = event.data.object;
+    try {
+      const customerId = customerIdFrom(session);
+      const userId = session.metadata?.userId ?? null;
+      const credits = await creditsFromSession(stripe, session);
+      const amountPaid = session.amount_total ?? 0;
+      await fulfillStripePurchase({
+        sessionId: session.id,
+        customerId,
+        userId,
+        credits,
+        amountPaid,
+      });
+    } catch (error) {
+      console.error("Stripe webhook fulfillment failed", error);
+      return jsonError(
+        error instanceof Error ? error.message : "Webhook fulfillment failed",
+        500,
+      );
+    }
+  }
+
+  return jsonOk({ received: true });
 }

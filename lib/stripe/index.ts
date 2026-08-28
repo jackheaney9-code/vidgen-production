@@ -1,30 +1,49 @@
-import Stripe from "stripe";
-
-import { CREDIT_PACKS_CATALOG } from "@/lib/constants";
-import { getAppUrl, getEnv, hasStripe } from "@/lib/env";
+import { getAppUrl, hasStripe } from "@/lib/env";
 import { HttpError } from "@/lib/errors";
-import type { CreditPack, CreditPackId } from "@/types";
+import { getStripe } from "@/lib/stripe/client";
+import type { CreditPack, Profile } from "@/types";
 
-export function getCreditPack(id: CreditPackId): CreditPack {
-  const pack = CREDIT_PACKS_CATALOG.find((item) => item.id === id);
-  if (!pack) {
-    throw new HttpError(400, "Unknown credit pack");
-  }
-  return pack;
-}
+export { getStripe } from "@/lib/stripe/client";
+export {
+  ensureStripeCreditPrices,
+  findPackByPriceId,
+  getCreditPack,
+  resolveCheckoutPrice,
+} from "@/lib/stripe/prices";
 
-export function getStripe(): Stripe {
-  const key = getEnv("STRIPE_SECRET_KEY");
-  if (!key) {
-    throw new HttpError(500, "Stripe is not configured");
+export async function getOrCreateStripeCustomer(input: {
+  profile: Profile;
+  email: string;
+  userId: string;
+}): Promise<string> {
+  const stripe = getStripe();
+  if (input.profile.stripeCustomerId) {
+    return input.profile.stripeCustomerId;
   }
-  return new Stripe(key);
+  const existing = await stripe.customers.list({
+    email: input.email,
+    limit: 1,
+  });
+  const reused = existing.data[0];
+  if (reused) {
+    await stripe.customers.update(reused.id, {
+      metadata: { userId: input.userId },
+    });
+    return reused.id;
+  }
+  const customer = await stripe.customers.create({
+    email: input.email,
+    metadata: { userId: input.userId },
+  });
+  return customer.id;
 }
 
 export async function createCheckoutSession(input: {
   userId: string;
   email: string;
+  customerId: string;
   pack: CreditPack;
+  stripePriceId: string;
 }): Promise<string> {
   if (!hasStripe()) {
     throw new HttpError(500, "Stripe is not configured");
@@ -33,24 +52,18 @@ export async function createCheckoutSession(input: {
   const appUrl = getAppUrl();
   const session = await stripe.checkout.sessions.create({
     mode: "payment",
-    customer_email: input.email,
+    customer: input.customerId,
     line_items: [
       {
+        price: input.stripePriceId,
         quantity: 1,
-        price_data: {
-          currency: "usd",
-          unit_amount: input.pack.priceCents,
-          product_data: {
-            name: `${input.pack.name} — ${input.pack.credits} Lumina credits`,
-            description: input.pack.blurb,
-          },
-        },
       },
     ],
     metadata: {
       userId: input.userId,
       pack: input.pack.id,
       credits: String(input.pack.credits),
+      priceId: input.stripePriceId,
     },
     success_url: `${appUrl}/dashboard/billing?status=success`,
     cancel_url: `${appUrl}/dashboard/billing?status=cancelled`,

@@ -11,6 +11,7 @@ import {
   fileListTransactions,
   fileUpdateAd,
   fileUpdateCredits,
+  fileUpdateStripeCustomerId,
 } from "@/lib/db/file-store";
 import {
   supabaseCreateAd,
@@ -22,6 +23,7 @@ import {
   supabaseListTransactions,
   supabaseUpdateAd,
   supabaseUpdateCredits,
+  supabaseUpdateStripeCustomerId,
 } from "@/lib/db/supabase-store";
 import type { Ad, CreditTransaction, Profile, Purchase } from "@/types";
 
@@ -114,4 +116,14 @@ export async function listPurchases(userId: string): Promise<Purchase[]> {
     return fileListPurchases(userId);
   }
   return supabaseListPurchases(userId);
+}
+
+export async function updateStripeCustomerId(
+  userId: string,
+  customerId: string,
+): Promise<Profile> {
+  if (usesFileStore()) {
+    return fileUpdateStripeCustomerId(userId, customerId);
+  }
+  return supabaseUpdateStripeCustomerId(userId, customerId);
 }

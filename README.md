@@ -13,7 +13,8 @@ AI video ad generator. Drop a product still, approve a 15–30 second script, th
 - `/lib/supabase/server.ts` — `createServerClient` (`@supabase/ssr`)
 - `/lib/supabase/client.ts` — `createBrowserClient`
 - `/lib/supabase/schema.sql` — Postgres tables, signup trigger, RLS
-- `/lib/stripe` — server helpers and Stripe.js client
+- `/lib/stripe/client.ts` — Stripe server SDK (test secret key)
+- `/lib/stripe` — checkout, customer, price catalogs
 - `/types/database.ts` — Supabase schema types
 - `/types/pipeline.ts` — generation job types
 
@@ -64,24 +65,30 @@ Set `DEMO_MODE=false` and fill in:
 - `ANTHROPIC_API_KEY`
 - `RUNWAY_API_KEY`
 - `ELEVENLABS_API_KEY`
-- `STRIPE_SECRET_KEY`
+- `STRIPE_SECRET_KEY` (use `sk_test_...`)
 - `STRIPE_WEBHOOK_SECRET`
-- `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`
+- `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` (`pk_test_...`)
 - `SESSION_SECRET`
 - `NEXT_PUBLIC_APP_URL`
 
+Optional Stripe price IDs (created automatically on first checkout if omitted):
+
+- `STRIPE_PRICE_1_CREDIT`
+- `STRIPE_PRICE_3_CREDITS`
+- `STRIPE_PRICE_5_CREDITS`
+
 Run `lib/supabase/schema.sql` (same as `supabase/migrations/001_init.sql`) in the Supabase SQL editor. That creates `profiles`, `generations`, and `purchases`, the signup trigger, RLS, and the `ads` storage bucket.
 
-Stripe webhook: `https://your-domain/api/webhook/stripe`.
+Stripe webhook: `https://your-domain/api/webhook/stripe`. Forward events locally with `stripe listen --forward-to http://127.0.0.1:43127/api/webhook/stripe`. The handler is idempotent on `purchases.stripe_session_id`.
 
 Vercel: this app expects a Node runtime with `ffmpeg` for composite. The hosted AI providers still run without it; local demo composite will not.
 
 ## Credits
 
-| Pack     | Credits | Price |
+| Pack      | Credits | Price |
 |----------|---------|-------|
-| Spark    | 5       | $12   |
-| Studio   | 15      | $29   |
-| Campaign | 50      | $89   |
+| 1 credit | 1       | $15   |
+| 3 credits | 3       | $29   |
+| 5 credits | 5       | $49   |
 
-Without Stripe keys, buying a pack credits the demo ledger immediately.
+Checkout is one-time (`mode: payment`), not a subscription. Without Stripe keys, buying a pack credits the demo ledger immediately.

@@ -1,14 +1,25 @@
-import { loadStripe, type Stripe } from "@stripe/stripe-js"
+import Stripe from "stripe";
 
-let stripePromise: Promise<Stripe | null> | null = null
+import { getEnv, hasStripe } from "@/lib/env";
+import { HttpError } from "@/lib/errors";
 
-export function getStripeJs(): Promise<Stripe | null> {
-  const key = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
+let stripe: Stripe | null = null;
+
+/** Server Stripe SDK. Use test keys (`sk_test_...`). */
+export function getStripe(): Stripe {
+  const key = getEnv("STRIPE_SECRET_KEY");
   if (!key) {
-    return Promise.resolve(null)
+    throw new HttpError(500, "Stripe is not configured");
   }
-  if (!stripePromise) {
-    stripePromise = loadStripe(key)
+  if (!key.startsWith("sk_test_") && !key.startsWith("sk_live_")) {
+    throw new HttpError(500, "STRIPE_SECRET_KEY looks invalid.");
   }
-  return stripePromise
+  if (!stripe) {
+    stripe = new Stripe(key);
+  }
+  return stripe;
+}
+
+export function isStripeConfigured(): boolean {
+  return hasStripe();
 }

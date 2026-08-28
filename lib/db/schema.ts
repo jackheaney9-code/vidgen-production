@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { AD_STYLES, CREDIT_PACKS } from "@/types";
+import { AD_STYLES } from "@/types";
 
 export const adScriptSchema = z.object({
   hook: z.string().min(1),
@@ -82,7 +82,7 @@ export const scriptUpdateSchema = z.object({
 });
 
 export const checkoutSchema = z.object({
-  pack: z.enum(CREDIT_PACKS),
+  priceId: z.string().min(1),
 });
 
 export const magicLinkSchema = z.object({

@@ -248,6 +248,26 @@ export async function supabaseUpdateAd(
   return mapAd(generationRowSchema.parse(data));
 }
 
+export async function supabaseUpdateStripeCustomerId(
+  userId: string,
+  customerId: string,
+): Promise<Profile> {
+  const supabase = await createSupabaseServer();
+  const { data, error } = await supabase
+    .from("profiles")
+    .update({
+      stripe_customer_id: customerId,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", userId)
+    .select("*")
+    .single();
+  if (error) {
+    throw new Error(error.message);
+  }
+  return mapProfile(profileRowSchema.parse(data));
+}
+
 export async function supabaseListPurchases(userId: string): Promise<Purchase[]> {
   const supabase = await createSupabaseServer();
   const { data, error } = await supabase

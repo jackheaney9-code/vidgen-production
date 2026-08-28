@@ -1,4 +1,5 @@
-import { PricingTable } from "@/components/features/pricing-table"
+import { CreditBalance } from "@/components/features/credit-balance"
+import { PricingCards } from "@/components/features/pricing-cards"
 import { requireUserWithProfile } from "@/lib/auth/require-user"
 import { listPurchases } from "@/lib/db"
 import { formatUsd } from "@/lib/constants"
@@ -17,9 +18,11 @@ export default async function BillingPage({
       <div>
         <h1 className="font-heading text-4xl">Credits</h1>
         <p className="mt-2 text-muted-foreground">
-          You have {profile.credits} {profile.credits === 1 ? "credit" : "credits"}. Each
-          finished video uses one.
+          Each finished video uses one credit. Packs are one-time, not a subscription.
         </p>
+        <div className="mt-4 flex items-center gap-3">
+          <CreditBalance initialCredits={profile.credits} className="inline-flex" />
+        </div>
         {status === "success" && (
           <p className="mt-3 text-sm text-primary">Credits added. Go make the next ad.</p>
         )}
@@ -27,7 +30,7 @@ export default async function BillingPage({
           <p className="mt-3 text-sm text-muted-foreground">Checkout cancelled. Nothing charged.</p>
         )}
       </div>
-      <PricingTable signedIn compact />
+      <PricingCards signedIn compact />
       <div>
         <h2 className="font-heading text-2xl">Ledger</h2>
         {purchases.length === 0 ? (

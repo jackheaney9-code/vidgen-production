@@ -2,6 +2,7 @@ import { mkdir, readFile, writeFile } from "fs/promises";
 import path from "path";
 
 import { storeFileSchema, type AdRecord, type ProfileRecord, type StoreFile } from "@/lib/db/schema";
+import { HttpError } from "@/lib/errors";
 import type { Ad, CreditTransaction, Profile, Purchase } from "@/types";
 import { adSchema, creditTransactionSchema, profileSchema, purchaseSchema } from "@/lib/db/schema";
 
@@ -195,9 +196,48 @@ export async function fileListTransactions(
     .map((item) => creditTransactionSchema.parse(item));
 }
 
+export async function fileGetProfileByStripeCustomerId(
+  customerId: string,
+): Promise<Profile | null> {
+  const store = await loadStore();
+  const record = store.profiles.find((item) => item.stripeCustomerId === customerId);
+  return record ? toProfile(record) : null;
+}
+
+export async function fileUpdateStripeCustomerId(
+  userId: string,
+  customerId: string,
+): Promise<Profile> {
+  return withLock(async () => {
+    const store = await loadStore();
+    const profile = store.profiles.find((item) => item.id === userId);
+    if (!profile) {
+      throw new Error("Profile not found");
+    }
+    profile.stripeCustomerId = customerId;
+    profile.updatedAt = new Date().toISOString();
+    await saveStore(store);
+    return toProfile(profile);
+  });
+}
+
+export async function fileGetPurchaseBySessionId(
+  sessionId: string,
+): Promise<Purchase | null> {
+  const store = await loadStore();
+  const record = store.purchases.find((item) => item.stripeSessionId === sessionId);
+  return record ? purchaseSchema.parse(record) : null;
+}
+
 export async function fileCreatePurchase(purchase: Purchase): Promise<Purchase> {
   return withLock(async () => {
     const store = await loadStore();
+    const existing = store.purchases.find(
+      (item) => item.stripeSessionId === purchase.stripeSessionId,
+    );
+    if (existing) {
+      return purchaseSchema.parse(existing);
+    }
     const record = purchaseSchema.parse(purchase);
     store.purchases.unshift(record);
     await saveStore(store);
@@ -210,6 +250,54 @@ export async function fileListPurchases(userId: string): Promise<Purchase[]> {
   return store.purchases
     .filter((item) => item.userId === userId)
     .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+}
+
+export async function fileFulfillStripePurchase(input: {
+  sessionId: string;
+  customerId: string | null;
+  userId: string | null;
+  credits: number;
+  amountPaid: number;
+}): Promise<{ duplicate: boolean; profile: Profile }> {
+  return withLock(async () => {
+    const store = await loadStore();
+    const existingPurchase = store.purchases.find(
+      (item) => item.stripeSessionId === input.sessionId,
+    );
+    const profileRecord =
+      (input.customerId
+        ? store.profiles.find((item) => item.stripeCustomerId === input.customerId)
+        : undefined) ??
+      (input.userId ? store.profiles.find((item) => item.id === input.userId) : undefined);
+    if (!profileRecord) {
+      throw new HttpError(500, "No profile matches this Stripe customer.");
+    }
+    if (existingPurchase) {
+      return { duplicate: true, profile: toProfile(profileRecord) };
+    }
+    const now = new Date().toISOString();
+    store.purchases.unshift({
+      id: crypto.randomUUID(),
+      userId: profileRecord.id,
+      stripeSessionId: input.sessionId,
+      creditsPurchased: input.credits,
+      amountPaid: input.amountPaid,
+      createdAt: now,
+    });
+    profileRecord.credits += input.credits;
+    profileRecord.updatedAt = now;
+    store.transactions.push({
+      id: crypto.randomUUID(),
+      userId: profileRecord.id,
+      amount: input.credits,
+      reason: "stripe_purchase",
+      adId: null,
+      stripeSessionId: input.sessionId,
+      createdAt: now,
+    });
+    await saveStore(store);
+    return { duplicate: false, profile: toProfile(profileRecord) };
+  });
 }
 
 export function parseProfile(record: ProfileRecord): Profile {

@@ -14,7 +14,7 @@ export const AD_STATUSES = [
 
 export type AdStatus = (typeof AD_STATUSES)[number];
 
-export const CREDIT_PACKS = ["spark", "studio", "campaign"] as const;
+export const CREDIT_PACKS = ["credit_1", "credit_3", "credit_5"] as const;
 
 export type CreditPackId = (typeof CREDIT_PACKS)[number];
 
@@ -96,6 +96,9 @@ export interface CreditPack {
   priceCents: number;
   blurb: string;
   popular: boolean;
+  lookupKey: string;
+  envPriceVar: "STRIPE_PRICE_1_CREDIT" | "STRIPE_PRICE_3_CREDITS" | "STRIPE_PRICE_5_CREDITS";
+  envPriceId?: string;
 }
 
 export type { Database, Json } from "@/types/database";
