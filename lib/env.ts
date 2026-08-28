@@ -53,7 +53,16 @@ export function hasSupabase(): boolean {
 }
 
 export function getAppUrl(): string {
-  return readEnv("NEXT_PUBLIC_APP_URL") ?? "http://127.0.0.1:43127";
+  const explicit = readEnv("NEXT_PUBLIC_APP_URL");
+  if (explicit) {
+    return explicit.replace(/\/$/, "");
+  }
+  const vercel = readEnv("VERCEL_URL");
+  if (vercel) {
+    const host = vercel.replace(/^https?:\/\//, "");
+    return `https://${host}`;
+  }
+  return "http://127.0.0.1:43127";
 }
 
 export function getSessionSecret(): string {

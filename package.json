@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack -p 43127 -H 0.0.0.0",
-    "build": "next build --turbopack",
+    "build": "next build",
     "start": "next start -p 43127 -H 0.0.0.0",
     "lint": "eslint"
   },
@@ -16,6 +16,8 @@
     "@supabase/supabase-js": "^2.112.4",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "ffmpeg-static": "^5.3.0",
+    "ffprobe-static": "^3.1.0",
     "jose": "^6.2.10",
     "lucide-react": "^1.35.0",
     "next": "15.5.24",

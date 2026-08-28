@@ -63,31 +63,32 @@ Credits: `credits < 1` returns **402**. One credit is deducted when picture star
 
 ## Production env
 
-Set `DEMO_MODE=false` and fill in:
+Set `DEMO_MODE=false` and fill in every key from `.env.local.example`. On Vercel, add the same names under Project → Settings → Environment Variables (Production).
 
-- `NEXT_PUBLIC_SUPABASE_URL`
-- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-- `SUPABASE_SERVICE_ROLE_KEY` (Stripe webhook credit grants)
-- `ANTHROPIC_API_KEY`
-- `RUNWAY_API_KEY`
-- `ELEVENLABS_API_KEY`
-- `STRIPE_SECRET_KEY` (use `sk_test_...`)
-- `STRIPE_WEBHOOK_SECRET`
-- `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` (`pk_test_...`)
-- `SESSION_SECRET`
-- `NEXT_PUBLIC_APP_URL`
+### Deploy on Vercel
 
-Optional Stripe price IDs (created automatically on first checkout if omitted):
+1. Import the repo. Framework preset: Next.js.
+2. Paste env vars from `.env.local.example`. Set `NEXT_PUBLIC_APP_URL` to `https://<your-app>.vercel.app` (or your custom domain).
+3. `vercel.json` raises `/api/generate-video` to **120 seconds** so picture + voice + composite can finish in one request.
+4. Composite uses a bundled `ffmpeg-static` binary (no system ffmpeg required on Vercel).
 
-- `STRIPE_PRICE_1_CREDIT`
-- `STRIPE_PRICE_3_CREDITS`
-- `STRIPE_PRICE_5_CREDITS`
+### Supabase
 
-Run `lib/supabase/schema.sql` (same as `supabase/migrations/001_init.sql`) in the Supabase SQL editor. That creates `profiles`, `generations`, and `purchases`, the signup trigger, RLS, and the `ads` storage bucket.
+In the Supabase SQL editor, run `lib/supabase/schema.sql` (same as `supabase/migrations/001_init.sql`). That creates `profiles`, `generations`, and `purchases`, the signup trigger, RLS, and the private `ads` storage bucket.
 
-Stripe webhook: `https://your-domain/api/webhook/stripe`. Forward events locally with `stripe listen --forward-to http://127.0.0.1:43127/api/webhook/stripe`. The handler is idempotent on `purchases.stripe_session_id`.
+Auth: enable Google and Email (OTP). Add `{NEXT_PUBLIC_APP_URL}/callback` to Redirect URLs.
 
-Vercel: this app expects a Node runtime with `ffmpeg` for composite. The hosted AI providers still run without it; local demo composite will not.
+### Stripe webhook
+
+Create an endpoint pointing at production:
+
+`https://your-domain.vercel.app/api/webhook/stripe`
+
+Listen for `checkout.session.completed`. Copy the signing secret into `STRIPE_WEBHOOK_SECRET`. The handler is idempotent on `purchases.stripe_session_id`.
+
+Optional price IDs (created automatically on first checkout if omitted): `STRIPE_PRICE_1_CREDIT`, `STRIPE_PRICE_3_CREDITS`, `STRIPE_PRICE_5_CREDITS`.
+
+Forward events locally with `stripe listen --forward-to http://127.0.0.1:43127/api/webhook/stripe`.
 
 ## Credits
 

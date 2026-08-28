@@ -4,7 +4,7 @@ import path from "path";
 
 import { PIPELINE_TIMEOUT_MS } from "@/lib/constants";
 import { getEnv, getRunwayModel, hasRunway } from "@/lib/env";
-import { getDrawtextFont, escapeDrawtext, runCommand } from "@/lib/ffmpeg";
+import { getDrawtextFont, escapeDrawtext, runCommand, ffmpegSupportsDrawtext } from "@/lib/ffmpeg";
 import { savePipelineFile, mimeFromPath, readMediaBytes } from "@/lib/storage";
 
 const RUNWAY_API = "https://api.dev.runwayml.com/v1";
@@ -124,7 +124,7 @@ async function renderKenBurns(
   const duration = 8;
   const fps = 25;
   const frames = duration * fps;
-  const font = getDrawtextFont();
+  const font = ffmpegSupportsDrawtext() ? getDrawtextFont() : null;
   const line = escapeDrawtext(truncate(prompt.split(".")[0] ?? "Lumina", 48));
 
   const textFilters =

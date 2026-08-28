@@ -26,13 +26,56 @@ export function escapeDrawtext(value: string): string {
     .replace(/\n/g, " ");
 }
 
+export function getFfmpegPath(): string {
+  if (existsSync("/usr/bin/ffmpeg")) {
+    return "/usr/bin/ffmpeg";
+  }
+  try {
+    // Bundled binary for Vercel.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const resolved = require("ffmpeg-static") as string | null;
+    if (typeof resolved === "string" && existsSync(resolved)) {
+      return resolved;
+    }
+  } catch {
+    // Fall through to PATH.
+  }
+  return "ffmpeg";
+}
+
+export function ffmpegSupportsDrawtext(): boolean {
+  return !getFfmpegPath().includes("ffmpeg-static");
+}
+
+export function getFfprobePath(): string {
+  if (existsSync("/usr/bin/ffprobe")) {
+    return "/usr/bin/ffprobe";
+  }
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const mod = require("ffprobe-static") as { path?: string };
+    if (typeof mod.path === "string" && existsSync(mod.path)) {
+      return mod.path;
+    }
+  } catch {
+    // Fall through to PATH.
+  }
+  return "ffprobe";
+}
+
 export function runCommand(
   command: string,
   args: string[],
   timeoutMs = 90_000,
 ): Promise<void> {
+  const bin =
+    command === "ffmpeg"
+      ? getFfmpegPath()
+      : command === "ffprobe"
+        ? getFfprobePath()
+        : command;
   return new Promise((resolve, reject) => {
-    const child = spawn(command, args, { stdio: ["ignore", "pipe", "pipe"] });
+    const child = spawn(bin, args, { stdio: ["ignore", "pipe", "pipe"] });
     let stderr = "";
 
     const timer = setTimeout(() => {

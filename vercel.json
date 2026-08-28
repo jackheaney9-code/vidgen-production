@@ -1,0 +1,21 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "nextjs",
+  "functions": {
+    "app/api/generate-video/route.ts": {
+      "maxDuration": 120
+    },
+    "app/api/generate-script/route.ts": {
+      "maxDuration": 60
+    },
+    "app/api/generate-voiceover/route.ts": {
+      "maxDuration": 60
+    },
+    "app/api/composite/route.ts": {
+      "maxDuration": 60
+    },
+    "app/api/webhook/stripe/route.ts": {
+      "maxDuration": 30
+    }
+  }
+}

@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "path";
 
 import { SIGNED_URL_TTL_SECONDS } from "@/lib/constants";
-import { runCommand } from "@/lib/ffmpeg";
+import { getFfprobePath, runCommand } from "@/lib/ffmpeg";
 import {
   getSignedMediaUrl,
   readMediaBytes,
@@ -105,7 +105,7 @@ async function loopVideoToAudio(
 
 async function probeDuration(filePath: string): Promise<number> {
   try {
-    const { stdout } = await execFileAsync("ffprobe", [
+    const { stdout } = await execFileAsync(getFfprobePath(), [
       "-v",
       "error",
       "-show_entries",

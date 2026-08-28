@@ -13,7 +13,7 @@ import { z } from "zod";
 import type { Ad } from "@/types";
 
 export const runtime = "nodejs";
-export const maxDuration = 300;
+export const maxDuration = 120;
 
 const bodySchema = z.object({
   generationId: z.string().min(1).optional(),
