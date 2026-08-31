@@ -99,3 +99,4 @@ Forward events locally with `stripe listen --forward-to http://127.0.0.1:43127/a
 | 5 credits | 5       | $49   |
 
 Checkout is one-time (`mode: payment`), not a subscription. Without Stripe keys, buying a pack credits the demo ledger immediately.
+# video-generation-
