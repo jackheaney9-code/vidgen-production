@@ -165,7 +165,7 @@ async function storeProductImage(
     throw new HttpError(400, "Upload a product image.");
   }
   if (file.size > MAX_UPLOAD_BYTES) {
-    throw new HttpError(400, "Image must be 8MB or smaller.");
+    throw new HttpError(400, "Image must be 4MB or smaller.");
   }
   if (!isAllowedImage(file.type)) {
     throw new HttpError(400, "Use a JPG, PNG, or WebP image.");

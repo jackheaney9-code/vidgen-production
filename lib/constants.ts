@@ -55,7 +55,7 @@ export const CREDIT_PACKS_CATALOG: CreditPack[] = [
 
 export const SIGNUP_BONUS_CREDITS = 3;
 export const VIDEO_CREDIT_COST = 1;
-export const MAX_UPLOAD_BYTES = 8 * 1024 * 1024;
+export const MAX_UPLOAD_BYTES = 4 * 1024 * 1024;
 export const ALLOWED_IMAGE_TYPES = [
   "image/jpeg",
   "image/jpg",

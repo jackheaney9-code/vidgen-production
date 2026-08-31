@@ -26,7 +26,7 @@ import {
 } from "@/components/ui/select"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
-import { STYLE_META } from "@/lib/constants"
+import { MAX_UPLOAD_BYTES, STYLE_META } from "@/lib/constants"
 import { AD_STYLES, type AdStyle } from "@/types"
 import { cn } from "@/lib/utils"
 
@@ -50,6 +50,11 @@ export function AdCreateForm() {
   const [script, setScript] = useState<string>("")
 
   function applyImage(file: File) {
+    if (file.size > MAX_UPLOAD_BYTES) {
+      setError("Image must be 4MB or smaller.")
+      return
+    }
+    setError(null)
     setUseSample(false)
     setImageFile(file)
     setPreview(URL.createObjectURL(file))
@@ -59,6 +64,11 @@ export function AdCreateForm() {
     event.preventDefault()
     setPending("script")
     setError(null)
+    if (imageFile && imageFile.size > MAX_UPLOAD_BYTES) {
+      setError("Image must be 4MB or smaller.")
+      setPending(null)
+      return
+    }
     const form = event.currentTarget
     const data = new FormData()
     data.set("productName", String(new FormData(form).get("productName") ?? ""))
@@ -76,9 +86,9 @@ export function AdCreateForm() {
         method: "POST",
         body: data,
       })
-      const payload: unknown = await res.json()
+      const payload = await readApiPayload(res)
       if (!res.ok) {
-        throw new Error(errorMessage(payload, "Couldn’t write the script."))
+        throw new Error(errorMessage(payload, `Couldn’t write the script. (${res.status})`))
       }
       if (
         typeof payload !== "object" ||
@@ -93,7 +103,7 @@ export function AdCreateForm() {
       setGenerationId(payload.generationId)
       setScript(payload.script)
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Couldn’t write the script.")
+      setError(sanitizeClientError(err, "Couldn’t write the script."))
     } finally {
       setPending(null)
     }
@@ -166,7 +176,7 @@ export function AdCreateForm() {
                   <>
                     <ImageIcon className="size-8 text-muted-foreground" />
                     <p className="mt-3 text-sm">Drop a JPG, PNG, or WebP — or click to browse.</p>
-                    <p className="mt-1 text-xs text-muted-foreground">Max 8MB. Vertical crops work best.</p>
+                    <p className="mt-1 text-xs text-muted-foreground">Max 4MB. Vertical crops work best.</p>
                   </>
                 )}
                 <input
@@ -337,5 +347,36 @@ function errorMessage(payload: unknown, fallback: string): string {
     return payload.error
   }
   return fallback
+}
+
+function sanitizeClientError(err: unknown, fallback: string): string {
+  const raw = err instanceof Error ? err.message : fallback
+  if (/unexpected end of json input/i.test(raw) || /is not valid json/i.test(raw)) {
+    return fallback
+  }
+  return raw
+}
+
+async function readApiPayload(res: Response): Promise<unknown> {
+  const contentType = (res.headers.get("content-type") ?? "").toLowerCase()
+  const text = await res.text()
+  const trimmed = text.trim()
+  const declaredJson = contentType.includes("application/json")
+  const looksLikeJson = trimmed.startsWith("{") || trimmed.startsWith("[")
+
+  if (trimmed && (declaredJson || looksLikeJson)) {
+    try {
+      return JSON.parse(trimmed) as unknown
+    } catch {
+      throw new Error(`Request failed (${res.status}): the server returned invalid JSON.`)
+    }
+  }
+
+  if (!trimmed) {
+    throw new Error(`Request failed (${res.status}): empty response.`)
+  }
+
+  const sanitized = trimmed.replace(/\s+/g, " ").slice(0, 180)
+  throw new Error(`Request failed (${res.status}): ${sanitized}`)
 }
 
