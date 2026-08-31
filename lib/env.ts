@@ -1,10 +1,21 @@
-function readEnv(name: string): string | undefined {
-  const value = process.env[name];
+function nonempty(value: string | undefined): string | undefined {
   if (typeof value !== "string") {
     return undefined;
   }
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : undefined;
+}
+
+function readEnv(name: string): string | undefined {
+  // Static NEXT_PUBLIC reads so Next.js inlines them into the client bundle.
+  // Dynamic process.env[name] is not replaced at build time and stays empty in the browser.
+  if (name === "NEXT_PUBLIC_SUPABASE_URL") {
+    return nonempty(process.env.NEXT_PUBLIC_SUPABASE_URL);
+  }
+  if (name === "NEXT_PUBLIC_SUPABASE_ANON_KEY") {
+    return nonempty(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
+  }
+  return nonempty(process.env[name]);
 }
 
 export function getEnv(name: string): string | undefined {
