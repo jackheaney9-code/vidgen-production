@@ -25,9 +25,6 @@ export async function saveUserFile(
   bytes: Buffer,
 ): Promise<string> {
   const objectPath = `${userId}/${relativePath}`.replaceAll("\\", "/");
-  const dest = path.join(STORAGE_ROOT, objectPath);
-  await mkdir(path.dirname(dest), { recursive: true });
-  await writeFile(dest, bytes);
 
   if (!isDemoMode() && hasSupabase()) {
     const supabase = await createSupabaseServer();
@@ -38,8 +35,12 @@ export async function saveUserFile(
     if (error) {
       throw new Error(error.message);
     }
+    return objectPath;
   }
 
+  const dest = path.join(STORAGE_ROOT, objectPath);
+  await mkdir(path.dirname(dest), { recursive: true });
+  await writeFile(dest, bytes);
   return objectPath;
 }
 

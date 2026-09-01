@@ -18,13 +18,13 @@ export async function POST(request: Request) {
 
     const contentType = request.headers.get("content-type") ?? "";
     if (contentType.includes("multipart/form-data")) {
-      return handleCreate(await request.formData());
+      return await handleCreate(await request.formData());
     }
 
     const body: unknown = await request.json();
     const existing = generateBodySchema.safeParse(body);
     if (existing.success) {
-      return handleRegenerate(existing.data.adId, existing.data.duration);
+      return await handleRegenerate(existing.data.adId, existing.data.duration);
     }
 
     return jsonError("Upload a product image to start a generation.", 400);
