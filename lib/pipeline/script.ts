@@ -11,6 +11,9 @@ import type { ScriptInput } from "@/types/pipeline";
 
 export type { ScriptInput };
 
+export const SCRIPT_UNAVAILABLE =
+  "Script generation is temporarily unavailable. Please try again.";
+
 export async function generateScript(input: ScriptInput): Promise<string> {
   if (!hasAnthropic()) {
     return mockScriptText(input);
@@ -22,17 +25,23 @@ export async function generateScript(input: ScriptInput): Promise<string> {
   }
 
   const client = new Anthropic({ apiKey });
-  const message = await client.messages.create({
-    model: getAnthropicModel(),
-    max_tokens: 800,
-    system: buildSystemPrompt(input),
-    messages: [
-      {
-        role: "user",
-        content: buildUserPrompt(input),
-      },
-    ],
-  });
+  let message;
+  try {
+    message = await client.messages.create({
+      model: getAnthropicModel(),
+      max_tokens: 800,
+      system: buildSystemPrompt(input),
+      messages: [
+        {
+          role: "user",
+          content: buildUserPrompt(input),
+        },
+      ],
+    });
+  } catch (error) {
+    console.error("Anthropic script generation failed", error);
+    throw new Error(SCRIPT_UNAVAILABLE);
+  }
 
   const text = message.content
     .map((block) => (block.type === "text" ? block.text : ""))

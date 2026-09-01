@@ -92,5 +92,5 @@ export function getRunwayModel(): string {
 }
 
 export function getAnthropicModel(): string {
-  return readEnv("ANTHROPIC_MODEL") ?? "claude-sonnet-4-20250514";
+  return readEnv("ANTHROPIC_MODEL") ?? "claude-sonnet-4-6";
 }
