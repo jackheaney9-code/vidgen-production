@@ -49,6 +49,9 @@ export interface Database {
           voiceover_url: string | null
           final_video_url: string | null
           error_message: string | null
+          runway_task_id: string | null
+          credit_charged: boolean
+          credit_refunded: boolean
           created_at: string
           updated_at: string
         }
@@ -66,6 +69,9 @@ export interface Database {
           voiceover_url?: string | null
           final_video_url?: string | null
           error_message?: string | null
+          runway_task_id?: string | null
+          credit_charged?: boolean
+          credit_refunded?: boolean
           created_at?: string
           updated_at?: string
         }
@@ -81,6 +87,9 @@ export interface Database {
           voiceover_url?: string | null
           final_video_url?: string | null
           error_message?: string | null
+          runway_task_id?: string | null
+          credit_charged?: boolean
+          credit_refunded?: boolean
           updated_at?: string
         }
         Relationships: [

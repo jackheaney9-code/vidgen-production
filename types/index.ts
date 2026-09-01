@@ -51,6 +51,9 @@ export interface Ad {
   finalPath: string | null;
   status: AdStatus;
   error: string | null;
+  runwayTaskId: string | null;
+  creditCharged: boolean;
+  creditRefunded: boolean;
   creditDeducted: boolean;
   createdAt: string;
   updatedAt: string;

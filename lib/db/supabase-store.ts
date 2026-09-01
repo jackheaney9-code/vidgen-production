@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { creditHeld } from "@/lib/constants";
+import { hasActiveVideoCredit } from "@/lib/credit-state";
 import { HttpError } from "@/lib/errors";
 import { createSupabaseServer } from "@/lib/supabase/server";
 import type { Ad, AdScript, CreditTransaction, Profile, Purchase } from "@/types";
@@ -63,6 +63,9 @@ const generationRowSchema = z.object({
   voiceover_url: z.string().nullable(),
   final_video_url: z.string().nullable(),
   error_message: z.string().nullable(),
+  runway_task_id: z.string().nullable(),
+  credit_charged: z.boolean(),
+  credit_refunded: z.boolean(),
   created_at: z.string(),
   updated_at: z.string(),
 });
@@ -79,6 +82,8 @@ function mapProfile(row: z.infer<typeof profileRowSchema>): Profile {
 }
 
 function mapAd(row: z.infer<typeof generationRowSchema>): Ad {
+  const creditCharged = row.credit_charged;
+  const creditRefunded = row.credit_refunded;
   return adSchema.parse({
     id: row.id,
     userId: row.user_id,
@@ -93,7 +98,14 @@ function mapAd(row: z.infer<typeof generationRowSchema>): Ad {
     finalPath: row.final_video_url,
     status: row.status,
     error: row.error_message,
-    creditDeducted: creditHeld(row.status),
+    runwayTaskId: row.runway_task_id,
+    creditCharged,
+    creditRefunded,
+    creditDeducted: hasActiveVideoCredit({
+      status: row.status,
+      creditCharged,
+      creditRefunded,
+    }),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   });
@@ -203,6 +215,9 @@ export async function supabaseCreateAd(ad: Ad): Promise<Ad> {
       final_video_url: ad.finalPath,
       status: ad.status,
       error_message: ad.error,
+      runway_task_id: ad.runwayTaskId,
+      credit_charged: ad.creditCharged,
+      credit_refunded: ad.creditRefunded,
     })
     .select("*")
     .single();
@@ -235,6 +250,9 @@ export async function supabaseUpdateAd(
   if (patch.finalPath !== undefined) payload.final_video_url = patch.finalPath;
   if (patch.status !== undefined) payload.status = patch.status;
   if (patch.error !== undefined) payload.error_message = patch.error;
+  if (patch.runwayTaskId !== undefined) payload.runway_task_id = patch.runwayTaskId;
+  if (patch.creditCharged !== undefined) payload.credit_charged = patch.creditCharged;
+  if (patch.creditRefunded !== undefined) payload.credit_refunded = patch.creditRefunded;
 
   const { data, error } = await supabase
     .from("generations")

@@ -48,7 +48,10 @@ export const adSchema = z.object({
   finalPath: z.string().nullable(),
   status: adStatusSchema,
   error: z.string().nullable(),
-  creditDeducted: z.boolean(),
+  runwayTaskId: z.string().nullable().default(null),
+  creditCharged: z.boolean().default(false),
+  creditRefunded: z.boolean().default(false),
+  creditDeducted: z.boolean().default(false),
   createdAt: z.string(),
   updatedAt: z.string(),
 });

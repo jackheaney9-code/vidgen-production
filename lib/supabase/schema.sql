@@ -35,9 +35,16 @@ create table if not exists public.generations (
   voiceover_url text,
   final_video_url text,
   error_message text,
+  runway_task_id text,
+  credit_charged boolean not null default false,
+  credit_refunded boolean not null default false,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+create unique index if not exists generations_runway_task_id_key
+  on public.generations (runway_task_id)
+  where runway_task_id is not null;
 
 create table if not exists public.purchases (
   id uuid primary key default gen_random_uuid(),

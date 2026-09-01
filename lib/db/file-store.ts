@@ -3,6 +3,7 @@ import path from "path";
 
 import { storeFileSchema, type AdRecord, type ProfileRecord, type StoreFile } from "@/lib/db/schema";
 import { HttpError } from "@/lib/errors";
+import { hasActiveVideoCredit } from "@/lib/credit-state";
 import type { Ad, CreditTransaction, Profile, Purchase } from "@/types";
 import { adSchema, creditTransactionSchema, profileSchema, purchaseSchema } from "@/lib/db/schema";
 
@@ -58,7 +59,11 @@ function toProfile(record: ProfileRecord): Profile {
 }
 
 function toAd(record: AdRecord): Ad {
-  return adSchema.parse(record);
+  const parsed = adSchema.parse(record);
+  return {
+    ...parsed,
+    creditDeducted: hasActiveVideoCredit(parsed),
+  };
 }
 
 export async function fileGetProfile(id: string): Promise<Profile | null> {

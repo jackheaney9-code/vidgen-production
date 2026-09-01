@@ -76,6 +76,11 @@ export function formatUsd(cents: number): string {
   }).format(dollars);
 }
 
+/**
+ * Statuses that previously implied a video credit had already been deducted.
+ * Phase A persists this as `credit_charged`. Phase B should stop treating
+ * status as credit proof and use `creditCharged` / `creditRefunded` only.
+ */
 export function creditHeld(status: string): boolean {
   return (
     status === "generating_video" ||
