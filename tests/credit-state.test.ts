@@ -119,5 +119,6 @@ test("credit-state module prefers persisted flags over status", () => {
   assert.match(source, /if \(ad\.creditRefunded\)/);
   assert.match(source, /if \(ad\.creditCharged\)/);
   assert.match(source, /creditHeld\(ad\.status\)/);
-  assert.match(source, /Phase B: remove the `creditHeld` fallback/);
+  assert.match(source, /hasPersistedActiveCredit/);
+  assert.match(source, /Generate-video uses `hasPersistedActiveCredit` only/);
 });

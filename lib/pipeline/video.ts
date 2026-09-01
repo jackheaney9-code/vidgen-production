@@ -2,13 +2,10 @@ import { mkdir, writeFile } from "fs/promises";
 import os from "node:os";
 import path from "path";
 
-import { PIPELINE_TIMEOUT_MS } from "@/lib/constants";
-import { getEnv, getRunwayModel, hasRunway } from "@/lib/env";
+import { getEnv, hasRunway } from "@/lib/env";
 import { getDrawtextFont, escapeDrawtext, runCommand, ffmpegSupportsDrawtext } from "@/lib/ffmpeg";
-import { savePipelineFile, mimeFromPath, readMediaBytes } from "@/lib/storage";
-
-const RUNWAY_API = "https://api.dev.runwayml.com/v1";
-const RUNWAY_VERSION = "2024-11-06";
+import { savePipelineFile, readMediaBytes } from "@/lib/storage";
+import { pollRunwayTask, startRunwayGeneration } from "@/lib/pipeline/runway";
 
 export function buildMotionPrompt(scriptSummary: string): string {
   const summary = scriptSummary.replace(/\s+/g, " ").trim().slice(0, 280);
@@ -33,70 +30,8 @@ async function generateWithRunway(
   if (!apiKey) {
     return generateKenBurnsFromUrl(imageUrl, prompt);
   }
-
-  const promptImage = await toRunwayImage(imageUrl);
-  const created = await fetchWithRetry(`${RUNWAY_API}/image_to_video`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "X-Runway-Version": RUNWAY_VERSION,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: getRunwayModel(),
-      promptImage,
-      init_image: promptImage,
-      promptText: prompt,
-      duration: 10,
-      ratio: "720:1280",
-    }),
-  });
-
-  if (!created.ok) {
-    const detail = await created.text();
-    throw new Error(`Runway rejected the job: ${detail.slice(0, 500)}`);
-  }
-
-  const createdBody: unknown = await created.json();
-  const id = readTaskId(createdBody);
-  if (!id) {
-    throw new Error("Runway did not return a task id");
-  }
-
-  return pollRunwayTask(apiKey, id);
-}
-
-async function pollRunwayTask(apiKey: string, id: string): Promise<string> {
-  const deadline = Date.now() + PIPELINE_TIMEOUT_MS;
-  while (Date.now() < deadline) {
-    await sleep(3000);
-    const res = await fetch(`${RUNWAY_API}/tasks/${id}`, {
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "X-Runway-Version": RUNWAY_VERSION,
-      },
-    });
-    if (res.status === 429) {
-      await sleep(retryDelay(res, 4000));
-      continue;
-    }
-    if (!res.ok) {
-      continue;
-    }
-    const body: unknown = await res.json();
-    const status = readStringField(body, "status");
-    if (status === "SUCCEEDED" || status === "completed") {
-      const url = readOutputUrl(body);
-      if (url) {
-        return url;
-      }
-      throw new Error("Runway finished without a video URL.");
-    }
-    if (status === "FAILED" || status === "failed" || status === "CANCELLED") {
-      throw new Error("Runway generation failed");
-    }
-  }
-  throw new Error("Runway generation timed out after 3 minutes.");
+  const id = await startRunwayGeneration(imageUrl, prompt);
+  return pollRunwayTask(id);
 }
 
 async function generateKenBurnsFromUrl(
@@ -158,88 +93,9 @@ async function renderKenBurns(
   ]);
 }
 
-async function toRunwayImage(imageUrl: string): Promise<string> {
-  if (/^https?:\/\//i.test(imageUrl)) {
-    return imageUrl;
-  }
-  const bytes = await readMediaBytes(imageUrl);
-  const mime = mimeFromPath(imageUrl);
-  return `data:${mime};base64,${imageBytesToBase64(bytes)}`;
-}
-
-function imageBytesToBase64(bytes: Buffer): string {
-  return bytes.toString("base64");
-}
-
-async function fetchWithRetry(
-  url: string,
-  init: RequestInit,
-  attempts = 4,
-): Promise<Response> {
-  let last: Response | null = null;
-  for (let attempt = 0; attempt < attempts; attempt += 1) {
-    const res = await fetch(url, init);
-    last = res;
-    if (res.status !== 429 && res.status !== 503) {
-      return res;
-    }
-    await sleep(retryDelay(res, 1500 * 2 ** attempt));
-  }
-  return last ?? fetch(url, init);
-}
-
-function retryDelay(res: Response, fallback: number): number {
-  const header = res.headers.get("retry-after");
-  const seconds = header ? Number(header) : NaN;
-  if (Number.isFinite(seconds) && seconds > 0) {
-    return Math.min(seconds * 1000, 20_000);
-  }
-  return Math.min(fallback, 20_000);
-}
-
 function truncate(value: string, max: number): string {
   if (value.length <= max) {
     return value;
   }
   return `${value.slice(0, max - 1)}…`;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
-
-function readTaskId(body: unknown): string | null {
-  if (!isRecord(body)) {
-    return null;
-  }
-  const id = body.id;
-  return typeof id === "string" ? id : null;
-}
-
-function readStringField(body: unknown, key: string): string | null {
-  if (!isRecord(body)) {
-    return null;
-  }
-  const value = body[key];
-  return typeof value === "string" ? value : null;
-}
-
-function readOutputUrl(body: unknown): string | null {
-  if (!isRecord(body)) {
-    return null;
-  }
-  const output = body.output;
-  if (Array.isArray(output) && typeof output[0] === "string") {
-    return output[0];
-  }
-  if (typeof output === "string") {
-    return output;
-  }
-  return null;
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => {
-    setTimeout(resolve, ms);
-  });
 }

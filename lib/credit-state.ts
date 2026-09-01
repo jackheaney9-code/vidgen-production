@@ -1,10 +1,28 @@
-import { creditHeld } from "@/lib/constants";
+import { creditHeld } from "./constants.ts";
+
+/**
+ * Persisted flags are the source of truth for generate-video (Phase B).
+ * `creditHeld(status)` remains for other legacy routes until later phases.
+ */
+export function hasPersistedActiveCredit(ad: {
+  creditCharged: boolean;
+  creditRefunded: boolean;
+}): boolean {
+  return ad.creditCharged && !ad.creditRefunded;
+}
+
+export function canRefundVideoCredit(ad: {
+  creditCharged: boolean;
+  creditRefunded: boolean;
+  finalPath: string | null;
+}): boolean {
+  return ad.creditCharged && !ad.creditRefunded && !ad.finalPath;
+}
 
 /**
  * True when this generation currently holds a deducted video credit.
- * Prefers persisted flags; falls back to `creditHeld(status)` so the
- * synchronous Produce path still works if flags are not yet written.
- * Phase B: remove the `creditHeld` fallback.
+ * Generate-video uses `hasPersistedActiveCredit` only.
+ * Other routes may still use this helper, including a status fallback.
  */
 export function hasActiveVideoCredit(ad: {
   status: string;
