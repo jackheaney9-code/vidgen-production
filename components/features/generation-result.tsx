@@ -23,9 +23,19 @@ import {
 import { Progress } from "@/components/ui/progress"
 import { STYLE_META } from "@/lib/constants"
 import {
+  createProduceGuard,
+  createRunwayPoller,
+  isProduceLockedStatus,
+  postGenerateVideo,
+  readApiJson,
+  shouldAutoProduce,
+  shouldPollRunway,
+  VIDEO_RECOVERY_USER_MESSAGE,
+  userFacingVideoError,
+  type VideoProgress,
+} from "@/lib/generation-client"
+import {
   formatCreatedAt,
-  isGeneratingStatus,
-  POLL_INTERVAL_MS,
   statusBadgeLabel,
   statusBadgeVariant,
 } from "@/lib/generation-status"
@@ -57,90 +67,173 @@ export function GenerationResult({
   autoProduce?: boolean
 }) {
   const [payload, setPayload] = useState(initial)
-  const [busy, setBusy] = useState(isGeneratingStatus(initial.ad.status))
-  const [error, setError] = useState<string | null>(initial.ad.error)
+  const [produceInFlight, setProduceInFlight] = useState(false)
+  const [hasRunwayTask, setHasRunwayTask] = useState(Boolean(initial.ad.runwayTaskId))
+  const [recoveryRequired, setRecoveryRequired] = useState(
+    initial.ad.status === "generating_video" && !initial.ad.runwayTaskId,
+  )
+  const [error, setError] = useState<string | null>(
+    initial.ad.status === "generating_video" && !initial.ad.runwayTaskId
+      ? VIDEO_RECOVERY_USER_MESSAGE
+      : initial.ad.error,
+  )
   const [payment, setPayment] = useState(false)
   const started = useRef(false)
+  const produceGuard = useRef(createProduceGuard())
   const ad = payload.ad
-  const generating = isGeneratingStatus(ad.status) || busy
+  const adIdRef = useRef(ad.id)
+  adIdRef.current = ad.id
+  const pictureBusy =
+    produceInFlight ||
+    shouldPollRunway({
+      status: ad.status,
+      hasRunwayTask,
+      recoveryRequired,
+    })
+  const voiceNext = ad.status === "generating_voice"
+  const compositing = ad.status === "compositing"
+
+  async function refresh(): Promise<GenerationPayload | null> {
+    try {
+      const res = await fetch(`/api/ads/${adIdRef.current}`, {
+        credentials: "include",
+        cache: "no-store",
+      })
+      const parsed = await readApiJson(res)
+      if (!res.ok || !isPayload(parsed.data)) {
+        return null
+      }
+      setPayload(parsed.data)
+      setHasRunwayTask(Boolean(parsed.data.ad.runwayTaskId))
+      if (parsed.data.ad.status === "generating_video" && !parsed.data.ad.runwayTaskId) {
+        setRecoveryRequired(true)
+        setError(VIDEO_RECOVERY_USER_MESSAGE)
+      } else if (parsed.data.ad.error && parsed.data.ad.status === "failed") {
+        setError(parsed.data.ad.error)
+      }
+      return parsed.data
+    } catch {
+      return null
+    }
+  }
+
+  function applyProgress(progress: VideoProgress) {
+    if (progress.recoveryRequired || (progress.status === "generating_video" && !progress.hasRunwayTask)) {
+      setRecoveryRequired(true)
+      setHasRunwayTask(false)
+      setError(VIDEO_RECOVERY_USER_MESSAGE)
+      setPayload((prev) => ({
+        ...prev,
+        ad: {
+          ...prev.ad,
+          status: progress.status,
+          error: VIDEO_RECOVERY_USER_MESSAGE,
+        },
+      }))
+      return
+    }
+
+    setHasRunwayTask(progress.hasRunwayTask)
+    setPayload((prev) => ({
+      ...prev,
+      ad: {
+        ...prev.ad,
+        status: progress.status,
+        error: progress.status === "failed" ? progress.error : null,
+      },
+    }))
+
+    if (progress.status === "failed") {
+      setError(userFacingVideoError(progress, "Picture generation failed. Please try again."))
+      return
+    }
+
+    if (progress.status !== "generating_video") {
+      void refresh()
+    }
+  }
+
+  const applyProgressRef = useRef(applyProgress)
+  applyProgressRef.current = applyProgress
 
   useEffect(() => {
     if (started.current) {
       return
     }
     started.current = true
-    if (autoProduce && ad.script && !ad.finalPath && ad.status !== "completed") {
-      if (isGeneratingStatus(ad.status)) {
-        setBusy(true)
-      } else {
-        void produce()
-      }
+    if (
+      shouldAutoProduce({
+        autoProduce,
+        hasScript: Boolean(ad.script),
+        finalPath: ad.finalPath,
+        status: ad.status,
+      })
+    ) {
+      void produce()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   useEffect(() => {
-    if (!isGeneratingStatus(ad.status) && !busy) {
+    const poll = shouldPollRunway({
+      status: ad.status,
+      hasRunwayTask,
+      recoveryRequired,
+    })
+    if (!poll) {
       return
     }
-    const id = ad.id
-    const timer = window.setInterval(() => {
-      void (async () => {
-        const res = await fetch(`/api/ads/${id}`)
-        const data: unknown = await res.json()
-        if (!res.ok || !isPayload(data)) {
-          return
-        }
-        setPayload(data)
-        setError(data.ad.error)
-        if (!isGeneratingStatus(data.ad.status)) {
-          setBusy(false)
-        }
-      })()
-    }, POLL_INTERVAL_MS)
-    return () => window.clearInterval(timer)
-  }, [ad.status, busy, ad.id])
-
-  async function refresh(): Promise<GenerationPayload | null> {
-    const res = await fetch(`/api/ads/${ad.id}`)
-    const data: unknown = await res.json()
-    if (!res.ok || !isPayload(data)) {
-      return null
-    }
-    setPayload(data)
-    setError(data.ad.error)
-    if (!isGeneratingStatus(data.ad.status)) {
-      setBusy(false)
-    }
-    return data
-  }
+    const poller = createRunwayPoller({
+      generationId: ad.id,
+      onProgress: (progress) => {
+        applyProgressRef.current(progress)
+      },
+      onFatalError: (message) => {
+        setError(message)
+      },
+    })
+    poller.start(true)
+    return () => poller.stop()
+  }, [ad.id, ad.status, hasRunwayTask, recoveryRequired])
 
   async function produce() {
+    if (isProduceLockedStatus(ad.status)) {
+      return
+    }
+    if (!produceGuard.current.tryBegin()) {
+      return
+    }
     setError(null)
     setPayment(false)
-    setBusy(true)
+    setProduceInFlight(true)
     try {
-      await postJson("/api/generate-video", {
-        generationId: ad.id,
-        adId: ad.id,
-      })
-      await refresh()
-    } catch (err) {
-      if (err instanceof PaymentRequiredError) {
-        setPayment(true)
-        setError(err.message)
-      } else {
-        setError(err instanceof Error ? err.message : "Generation failed")
+      const outcome = await postGenerateVideo(ad.id)
+      if (outcome.kind === "recovery") {
+        setRecoveryRequired(true)
+        setError(VIDEO_RECOVERY_USER_MESSAGE)
+        return
       }
-      await refresh()
+      if (outcome.kind === "payment") {
+        setPayment(true)
+        setError(outcome.message)
+        return
+      }
+      if (outcome.kind === "error") {
+        setError(outcome.message)
+        return
+      }
+      applyProgress(outcome.progress)
     } finally {
-      setBusy(false)
+      produceGuard.current.end()
+      setProduceInFlight(false)
     }
   }
 
   const script = ad.script
   const canProduce =
-    Boolean(script) && !generating && ad.status === "pending"
+    Boolean(script) && ad.status === "pending" && !produceInFlight && !recoveryRequired
+  const canRetry =
+    ad.status === "failed" && !produceInFlight && !recoveryRequired && !pictureBusy
 
   return (
     <div className="space-y-8">
@@ -178,7 +271,9 @@ export function GenerationResult({
       {error && (
         <Alert variant="destructive">
           <CircleAlertIcon />
-          <AlertTitle>{payment ? "Out of credits" : "Generation stopped"}</AlertTitle>
+          <AlertTitle>
+            {payment ? "Out of credits" : recoveryRequired ? "Manual recovery needed" : "Generation stopped"}
+          </AlertTitle>
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       )}
@@ -199,6 +294,14 @@ export function GenerationResult({
                 controls
                 playsInline
               />
+            ) : payload.videoUrl && !pictureBusy ? (
+              <video
+                className="aspect-[9/16] w-full bg-black object-contain"
+                src={payload.videoUrl}
+                poster={payload.productImageUrl}
+                controls
+                playsInline
+              />
             ) : (
               <div className="relative">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -207,7 +310,7 @@ export function GenerationResult({
                   alt={ad.productName}
                   className="aspect-[9/16] w-full object-cover"
                 />
-                {generating && (
+                {pictureBusy && (
                   <div className="absolute inset-0 flex items-center justify-center bg-black/45">
                     <Loader2Icon className="size-8 animate-spin text-primary" />
                   </div>
@@ -220,12 +323,41 @@ export function GenerationResult({
         <div className="space-y-4">
           <PipelineSteps status={ad.status} scriptReady={Boolean(script)} />
 
-          {generating && (
+          {pictureBusy && (
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-sm">
                   <Loader2Icon className="size-4 animate-spin text-primary" />
-                  {STEP_COPY[stepFromStatus(ad.status)]}
+                  {STEP_COPY.video}
+                </CardTitle>
+                <CardDescription>This usually takes 1–2 minutes.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Progress value={progressFromStatus(ad.status)} className="w-full" />
+              </CardContent>
+            </Card>
+          )}
+
+          {voiceNext && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm">Video generated. Voice generation is next.</CardTitle>
+                <CardDescription>
+                  Picture is ready. Voiceover will start in a later step.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Progress value={progressFromStatus("generating_voice")} className="w-full" />
+              </CardContent>
+            </Card>
+          )}
+
+          {compositing && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-sm">
+                  <Loader2Icon className="size-4 animate-spin text-primary" />
+                  {STEP_COPY.composite}
                 </CardTitle>
                 <CardDescription>This usually takes 1–2 minutes.</CardDescription>
               </CardHeader>
@@ -253,13 +385,22 @@ export function GenerationResult({
           </Card>
 
           {canProduce && (
-            <Button type="button" onClick={() => void produce()} disabled={busy}>
-              {busy ? <Loader2Icon className="animate-spin" /> : null}
+            <Button
+              type="button"
+              onClick={() => void produce()}
+              disabled={produceInFlight || isProduceLockedStatus(ad.status)}
+            >
+              {produceInFlight ? <Loader2Icon className="animate-spin" /> : null}
               Produce video ad
             </Button>
           )}
-          {ad.status === "failed" && !generating && (
-            <Button type="button" onClick={() => void produce()}>
+          {canRetry && (
+            <Button
+              type="button"
+              onClick={() => void produce()}
+              disabled={produceInFlight}
+            >
+              {produceInFlight ? <Loader2Icon className="animate-spin" /> : null}
               Try again
             </Button>
           )}
@@ -332,7 +473,10 @@ function PipelineSteps({
   return (
     <ol className="grid grid-cols-4 gap-2">
       {steps.map((step) => {
-        const active = stepFromStatus(status) === step.key && isGeneratingStatus(status)
+        const active =
+          (step.key === "script" && status === "generating_script") ||
+          (step.key === "video" && status === "generating_video") ||
+          (step.key === "composite" && status === "compositing")
         return (
           <li
             key={step.key}
@@ -360,15 +504,6 @@ function PipelineSteps({
   )
 }
 
-function stepFromStatus(status: Ad["status"]): PipelineStep {
-  if (status === "generating_script") return "script"
-  if (status === "generating_video") return "video"
-  if (status === "generating_voice") return "voice"
-  if (status === "compositing") return "composite"
-  if (status === "completed") return "composite"
-  return "video"
-}
-
 function progressFromStatus(status: Ad["status"]): number {
   if (status === "completed") return 100
   if (status === "compositing") return 80
@@ -376,45 +511,6 @@ function progressFromStatus(status: Ad["status"]): number {
   if (status === "generating_video") return 30
   if (status === "generating_script") return 12
   return 20
-}
-
-class PaymentRequiredError extends Error {
-  constructor(message: string) {
-    super(message)
-    this.name = "PaymentRequiredError"
-  }
-}
-
-async function postJson(
-  url: string,
-  body: { adId?: string; generationId?: string },
-): Promise<void> {
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  })
-  const data: unknown = await res.json().catch(() => null)
-  if (res.status === 402) {
-    const message =
-      typeof data === "object" &&
-      data !== null &&
-      "error" in data &&
-      typeof data.error === "string"
-        ? data.error
-        : "You need at least 1 credit to generate a video."
-    throw new PaymentRequiredError(message)
-  }
-  if (!res.ok) {
-    const message =
-      typeof data === "object" &&
-      data !== null &&
-      "error" in data &&
-      typeof data.error === "string"
-        ? data.error
-        : "Request failed"
-    throw new Error(message)
-  }
 }
 
 function isPayload(value: unknown): value is GenerationPayload {
