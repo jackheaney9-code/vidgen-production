@@ -8,9 +8,11 @@ import {
   createRunwayPoller,
   isProduceLockedStatus,
   postGenerateVideo,
+  postGenerateVoiceover,
   RUNWAY_POLL_INTERVAL_MS,
   shouldAutoProduce,
   shouldPollRunway,
+  shouldStartVoice,
   VIDEO_RECOVERY_USER_MESSAGE,
   type VideoProgress,
 } from "../lib/generation-client.ts";
@@ -373,13 +375,109 @@ test("generation page wires async Runway polling without provider calls", () => 
   const client = readFileSync(path.join(process.cwd(), "lib/generation-client.ts"), "utf8");
   assert.match(source, /createRunwayPoller/);
   assert.match(source, /postGenerateVideo/);
-  assert.match(source, /Video generated\. Voice generation is next/);
+  assert.match(source, /postGenerateVoiceover/);
+  assert.match(source, /Voice generated\. Composite is next/);
   assert.match(source, /VIDEO_RECOVERY_USER_MESSAGE/);
   assert.doesNotMatch(source, /setInterval/);
   assert.doesNotMatch(source, /elevenlabs/i);
-  assert.doesNotMatch(source, /generate-voice/);
+  assert.doesNotMatch(source, /\/api\/composite/);
   assert.doesNotMatch(client, /startRunwayGeneration/);
   assert.doesNotMatch(client, /getRunwayTask/);
   assert.match(client, /method: "GET"/);
   assert.equal(RUNWAY_POLL_INTERVAL_MS, 3_000);
+});
+
+test("4. repeated frontend voice starts only one POST at a time", async () => {
+  const guard = createProduceGuard();
+  let posts = 0;
+  const fetchImpl = async (url: string, init?: RequestInit) => {
+    assert.equal(url, "/api/generate-voiceover");
+    assert.equal(init?.method, "POST");
+    posts += 1;
+    await wait(40);
+    return jsonResponse(200, {
+      generationId: "gen-1",
+      status: "compositing",
+      videoReady: true,
+      voiceReady: true,
+      finalReady: false,
+      error: null,
+    });
+  };
+
+  async function start() {
+    if (!shouldStartVoice({
+      status: "generating_voice",
+      videoReady: true,
+      voiceReady: false,
+    })) {
+      return;
+    }
+    if (!guard.tryBegin()) {
+      return;
+    }
+    try {
+      await postGenerateVoiceover("gen-1", fetchImpl);
+    } finally {
+      guard.end();
+    }
+  }
+
+  void start();
+  void start();
+  await wait(80);
+  assert.equal(posts, 1);
+});
+
+test("5. refresh at generating_voice resumes voice generation safely", () => {
+  assert.equal(
+    shouldStartVoice({
+      status: "generating_voice",
+      videoReady: true,
+      voiceReady: false,
+    }),
+    true,
+  );
+  assert.equal(
+    shouldAutoProduce({
+      autoProduce: true,
+      hasScript: true,
+      finalPath: null,
+      status: "generating_voice",
+    }),
+    false,
+  );
+});
+
+test("6. compositing never starts voice", () => {
+  assert.equal(
+    shouldStartVoice({
+      status: "compositing",
+      videoReady: true,
+      voiceReady: true,
+    }),
+    false,
+  );
+});
+
+test("7. completed never starts voice", () => {
+  assert.equal(
+    shouldStartVoice({
+      status: "completed",
+      videoReady: true,
+      voiceReady: true,
+    }),
+    false,
+  );
+});
+
+test("voice client sanitizes provider errors", async () => {
+  const outcome = await postGenerateVoiceover("gen-1", async () =>
+    jsonResponse(502, { error: "ElevenLabs rejected the job: request_id=abc" }),
+  );
+  assert.equal(outcome.kind, "error");
+  if (outcome.kind === "error") {
+    assert.doesNotMatch(outcome.message, /elevenlabs/i);
+    assert.doesNotMatch(outcome.message, /request_id/);
+  }
 });

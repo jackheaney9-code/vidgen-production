@@ -27,12 +27,15 @@ import {
   createRunwayPoller,
   isProduceLockedStatus,
   postGenerateVideo,
+  postGenerateVoiceover,
   readApiJson,
   shouldAutoProduce,
   shouldPollRunway,
+  shouldStartVoice,
   VIDEO_RECOVERY_USER_MESSAGE,
   userFacingVideoError,
   type VideoProgress,
+  type VoiceProgress,
 } from "@/lib/generation-client"
 import {
   formatCreatedAt,
@@ -68,7 +71,11 @@ export function GenerationResult({
 }) {
   const [payload, setPayload] = useState(initial)
   const [produceInFlight, setProduceInFlight] = useState(false)
+  const [voiceInFlight, setVoiceInFlight] = useState(false)
   const [hasRunwayTask, setHasRunwayTask] = useState(Boolean(initial.ad.runwayTaskId))
+  const [videoReady, setVideoReady] = useState(
+    Boolean(initial.ad.videoPath) || Boolean(initial.videoUrl),
+  )
   const [recoveryRequired, setRecoveryRequired] = useState(
     initial.ad.status === "generating_video" && !initial.ad.runwayTaskId,
   )
@@ -80,6 +87,8 @@ export function GenerationResult({
   const [payment, setPayment] = useState(false)
   const started = useRef(false)
   const produceGuard = useRef(createProduceGuard())
+  const voiceGuard = useRef(createProduceGuard())
+  const voiceAttemptedFor = useRef<string | null>(null)
   const ad = payload.ad
   const adIdRef = useRef(ad.id)
   adIdRef.current = ad.id
@@ -90,7 +99,15 @@ export function GenerationResult({
       hasRunwayTask,
       recoveryRequired,
     })
-  const voiceNext = ad.status === "generating_voice"
+  const wantsVoice = shouldStartVoice({
+    status: ad.status,
+    videoReady: videoReady || Boolean(ad.videoPath) || Boolean(payload.videoUrl),
+    voiceReady: Boolean(ad.voicePath),
+  })
+  const voiceBusy =
+    ad.status === "generating_voice" &&
+    !ad.voicePath &&
+    (voiceInFlight || wantsVoice && !ad.error)
   const compositing = ad.status === "compositing"
 
   async function refresh(): Promise<GenerationPayload | null> {
@@ -105,6 +122,7 @@ export function GenerationResult({
       }
       setPayload(parsed.data)
       setHasRunwayTask(Boolean(parsed.data.ad.runwayTaskId))
+      setVideoReady(Boolean(parsed.data.ad.videoPath) || Boolean(parsed.data.videoUrl))
       if (parsed.data.ad.status === "generating_video" && !parsed.data.ad.runwayTaskId) {
         setRecoveryRequired(true)
         setError(VIDEO_RECOVERY_USER_MESSAGE)
@@ -134,6 +152,9 @@ export function GenerationResult({
     }
 
     setHasRunwayTask(progress.hasRunwayTask)
+    if (progress.videoReady) {
+      setVideoReady(true)
+    }
     setPayload((prev) => ({
       ...prev,
       ad: {
@@ -155,6 +176,52 @@ export function GenerationResult({
 
   const applyProgressRef = useRef(applyProgress)
   applyProgressRef.current = applyProgress
+
+  function applyVoiceProgress(progress: VoiceProgress) {
+    if (progress.videoReady) {
+      setVideoReady(true)
+    }
+    setPayload((prev) => ({
+      ...prev,
+      ad: {
+        ...prev.ad,
+        status: progress.status,
+        error: progress.error,
+      },
+    }))
+    if (progress.voiceReady || progress.status === "compositing" || progress.status === "completed") {
+      void refresh()
+    }
+  }
+
+  async function startVoice() {
+    if (!voiceGuard.current.tryBegin()) {
+      return
+    }
+    setVoiceInFlight(true)
+    setError(null)
+    try {
+      const outcome = await postGenerateVoiceover(adIdRef.current)
+      if (outcome.kind === "error") {
+        setError(outcome.message)
+        setPayload((prev) => ({
+          ...prev,
+          ad: {
+            ...prev.ad,
+            error: outcome.message,
+          },
+        }))
+        return
+      }
+      applyVoiceProgress(outcome.progress)
+    } finally {
+      voiceGuard.current.end()
+      setVoiceInFlight(false)
+    }
+  }
+
+  const startVoiceRef = useRef(startVoice)
+  startVoiceRef.current = startVoice
 
   useEffect(() => {
     if (started.current) {
@@ -196,6 +263,24 @@ export function GenerationResult({
     return () => poller.stop()
   }, [ad.id, ad.status, hasRunwayTask, recoveryRequired])
 
+  useEffect(() => {
+    const ready =
+      videoReady || Boolean(ad.videoPath) || Boolean(payload.videoUrl)
+    const start = shouldStartVoice({
+      status: ad.status,
+      videoReady: ready,
+      voiceReady: Boolean(ad.voicePath),
+    })
+    if (!start) {
+      return
+    }
+    if (voiceAttemptedFor.current === ad.id) {
+      return
+    }
+    voiceAttemptedFor.current = ad.id
+    void startVoiceRef.current()
+  }, [ad.id, ad.status, ad.videoPath, ad.voicePath, payload.videoUrl, videoReady])
+
   async function produce() {
     if (isProduceLockedStatus(ad.status)) {
       return
@@ -234,6 +319,12 @@ export function GenerationResult({
     Boolean(script) && ad.status === "pending" && !produceInFlight && !recoveryRequired
   const canRetry =
     ad.status === "failed" && !produceInFlight && !recoveryRequired && !pictureBusy
+  const canRetryVoice =
+    ad.status === "generating_voice" &&
+    Boolean(ad.videoPath || payload.videoUrl || videoReady) &&
+    !ad.voicePath &&
+    Boolean(error) &&
+    !voiceInFlight
 
   return (
     <div className="space-y-8">
@@ -321,7 +412,7 @@ export function GenerationResult({
         </div>
 
         <div className="space-y-4">
-          <PipelineSteps status={ad.status} scriptReady={Boolean(script)} />
+          <PipelineSteps status={ad.status} scriptReady={Boolean(script)} voiceBusy={voiceBusy} />
 
           {pictureBusy && (
             <Card>
@@ -338,13 +429,14 @@ export function GenerationResult({
             </Card>
           )}
 
-          {voiceNext && (
+          {voiceBusy && (
             <Card>
               <CardHeader>
-                <CardTitle className="text-sm">Video generated. Voice generation is next.</CardTitle>
-                <CardDescription>
-                  Picture is ready. Voiceover will start in a later step.
-                </CardDescription>
+                <CardTitle className="flex items-center gap-2 text-sm">
+                  <Loader2Icon className="size-4 animate-spin text-primary" />
+                  {STEP_COPY.voice}
+                </CardTitle>
+                <CardDescription>This usually takes less than a minute.</CardDescription>
               </CardHeader>
               <CardContent>
                 <Progress value={progressFromStatus("generating_voice")} className="w-full" />
@@ -355,14 +447,13 @@ export function GenerationResult({
           {compositing && (
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-sm">
-                  <Loader2Icon className="size-4 animate-spin text-primary" />
-                  {STEP_COPY.composite}
-                </CardTitle>
-                <CardDescription>This usually takes 1–2 minutes.</CardDescription>
+                <CardTitle className="text-sm">Voice generated. Composite is next.</CardTitle>
+                <CardDescription>
+                  Picture and voiceover are ready. Combining them will start in a later step.
+                </CardDescription>
               </CardHeader>
               <CardContent>
-                <Progress value={progressFromStatus(ad.status)} className="w-full" />
+                <Progress value={progressFromStatus("compositing")} className="w-full" />
               </CardContent>
             </Card>
           )}
@@ -392,6 +483,21 @@ export function GenerationResult({
             >
               {produceInFlight ? <Loader2Icon className="animate-spin" /> : null}
               Produce video ad
+            </Button>
+          )}
+          {canRetryVoice && (
+            <Button
+              type="button"
+              onClick={() => {
+                voiceAttemptedFor.current = null
+                setError(null)
+                voiceAttemptedFor.current = ad.id
+                void startVoice()
+              }}
+              disabled={voiceInFlight}
+            >
+              {voiceInFlight ? <Loader2Icon className="animate-spin" /> : null}
+              Try voiceover again
             </Button>
           )}
           {canRetry && (
@@ -448,9 +554,11 @@ function MetaRow({ label, value }: { label: string; value: string }) {
 function PipelineSteps({
   status,
   scriptReady,
+  voiceBusy,
 }: {
   status: Ad["status"]
   scriptReady: boolean
+  voiceBusy: boolean
 }) {
   const steps = [
     { key: "script", label: "Script", done: scriptReady },
@@ -476,7 +584,7 @@ function PipelineSteps({
         const active =
           (step.key === "script" && status === "generating_script") ||
           (step.key === "video" && status === "generating_video") ||
-          (step.key === "composite" && status === "compositing")
+          (step.key === "voice" && voiceBusy)
         return (
           <li
             key={step.key}

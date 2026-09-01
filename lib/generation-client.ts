@@ -27,6 +27,19 @@ export type ApiJsonResult = {
   empty: boolean;
 };
 
+export type VoiceProgress = {
+  generationId: string;
+  status: AdStatus;
+  videoReady: boolean;
+  voiceReady: boolean;
+  finalReady: boolean;
+  error: string | null;
+};
+
+export type VoiceOutcome =
+  | { kind: "progress"; progress: VoiceProgress }
+  | { kind: "error"; message: string };
+
 export type ProduceOutcome =
   | { kind: "progress"; progress: VideoProgress }
   | { kind: "recovery" }
@@ -71,6 +84,14 @@ export function shouldPollRunway(args: {
     return false;
   }
   return args.hasRunwayTask;
+}
+
+export function shouldStartVoice(args: {
+  status: AdStatus;
+  videoReady: boolean;
+  voiceReady: boolean;
+}): boolean {
+  return args.status === "generating_voice" && args.videoReady && !args.voiceReady;
 }
 
 export function shouldAutoProduce(args: {
@@ -160,6 +181,27 @@ export function parseVideoProgress(data: unknown): VideoProgress | null {
   };
 }
 
+export function parseVoiceProgress(data: unknown): VoiceProgress | null {
+  if (typeof data !== "object" || data === null) {
+    return null;
+  }
+  const record = data as Record<string, unknown>;
+  if (typeof record.generationId !== "string" || !record.generationId) {
+    return null;
+  }
+  if (typeof record.status !== "string" || !isAdStatus(record.status)) {
+    return null;
+  }
+  return {
+    generationId: record.generationId,
+    status: record.status,
+    videoReady: Boolean(record.videoReady),
+    voiceReady: Boolean(record.voiceReady),
+    finalReady: Boolean(record.finalReady),
+    error: typeof record.error === "string" ? record.error : null,
+  };
+}
+
 export function userFacingVideoError(
   progress: Pick<VideoProgress, "recoveryRequired" | "error"> | null,
   fallback = "Generation failed",
@@ -238,6 +280,60 @@ export async function postGenerateVideo(
     return { kind: "recovery" };
   }
   return { kind: "progress", progress };
+}
+
+export async function postGenerateVoiceover(
+  generationId: string,
+  fetchImpl: FetchLike = fetch,
+): Promise<VoiceOutcome> {
+  let res: Pick<Response, "ok" | "status" | "text">;
+  try {
+    res = await fetchImpl("/api/generate-voiceover", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ generationId, adId: generationId }),
+    });
+  } catch {
+    return {
+      kind: "error",
+      message: "Could not start voice generation. Check your connection and try again.",
+    };
+  }
+
+  const parsed = await readApiJson(res);
+  if (res.status === 401) {
+    return { kind: "error", message: "Session expired. Sign in again to continue." };
+  }
+  if (parsed.parseError || parsed.empty) {
+    return { kind: "error", message: "Could not generate the voiceover." };
+  }
+  if (!res.ok) {
+    return {
+      kind: "error",
+      message: sanitizeVoiceClientError(
+        errorMessageFromData(parsed.data, "Could not generate the voiceover."),
+      ),
+    };
+  }
+  const progress = parseVoiceProgress(parsed.data);
+  if (!progress) {
+    return { kind: "error", message: "Could not generate the voiceover." };
+  }
+  if (progress.error && !progress.voiceReady) {
+    return {
+      kind: "error",
+      message: sanitizeVoiceClientError(progress.error),
+    };
+  }
+  return { kind: "progress", progress };
+}
+
+function sanitizeVoiceClientError(message: string): string {
+  if (/elevenlabs|xi-api|request id|trace/i.test(message)) {
+    return "Voice generation failed. Your picture is saved — you can try the voiceover again.";
+  }
+  return message;
 }
 
 export function createRunwayPoller(opts: {

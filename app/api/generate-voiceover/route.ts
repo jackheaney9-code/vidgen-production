@@ -1,50 +1,48 @@
 import { loadOwnedAd } from "@/lib/ads";
-import { refundVideoCredit } from "@/lib/credits";
 import { requireUserWithProfile } from "@/lib/auth/require-user";
-import { updateAd } from "@/lib/db";
-import { generateBodySchema } from "@/lib/db/schema";
+import { getAd, updateAd } from "@/lib/db";
 import { jsonError, jsonFromUnknown, jsonOk } from "@/lib/http";
-import { runWithPipelineContext } from "@/lib/pipeline/context";
-import { generateVoiceover } from "@/lib/pipeline/voice";
+import { hasElevenLabs, isDemoMode } from "@/lib/env";
+import {
+  generateVoice,
+  toVoiceProgress,
+} from "@/lib/pipeline/generate-voice-service";
+import { synthesizeSpeech } from "@/lib/pipeline/voice";
+import { saveUserFile } from "@/lib/storage";
+import { z } from "zod";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
+const bodySchema = z.object({
+  generationId: z.string().min(1).optional(),
+  adId: z.string().min(1).optional(),
+});
+
 export async function POST(request: Request) {
   try {
     await requireUserWithProfile();
+
     const body: unknown = await request.json();
-    const parsed = generateBodySchema.safeParse(body);
-    if (!parsed.success) {
-      return jsonError("adId is required", 400);
+    const parsed = bodySchema.safeParse(body);
+    const generationId = parsed.success
+      ? (parsed.data.generationId ?? parsed.data.adId)
+      : null;
+    if (!generationId) {
+      return jsonError("generationId is required", 400);
     }
 
-    const ad = await loadOwnedAd(parsed.data.adId);
-    if (!ad.script) {
-      return jsonError("A script is required for voiceover.", 400);
-    }
-
-    await updateAd(ad.id, { status: "generating_voice", error: null });
-
-    try {
-      const voiceUrl = await runWithPipelineContext(
-        { userId: ad.userId, generationId: ad.id },
-        () => generateVoiceover(ad.script?.fullText ?? ""),
-      );
-      const updated = await updateAd(ad.id, {
-        voicePath: voiceUrl,
-        status: "generating_voice",
-        error: null,
-      });
-      return jsonOk({ ad: updated, url: voiceUrl });
-    } catch (error) {
-      await refundVideoCredit(ad.id);
-      await updateAd(ad.id, {
-        status: "failed",
-        error: error instanceof Error ? error.message : "Voiceover failed",
-      });
-      throw error;
-    }
+    const ad = await loadOwnedAd(generationId);
+    const updated = await generateVoice(ad, {
+      canSynthesize: () => hasElevenLabs() || isDemoMode(),
+      synthesize: (text) => synthesizeSpeech(text),
+      async saveVoice(userId, id, bytes) {
+        return saveUserFile(userId, `${id}/voice.mp3`, bytes);
+      },
+      persist: (id, patch) => updateAd(id, patch),
+      load: (id) => getAd(id),
+    });
+    return jsonOk(toVoiceProgress(updated));
   } catch (error) {
     return jsonFromUnknown(error);
   }

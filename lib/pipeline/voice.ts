@@ -1,21 +1,24 @@
 import { getElevenLabsVoiceId, getEnv, hasElevenLabs } from "@/lib/env";
+import { HttpError } from "@/lib/errors";
 import { runCommand } from "@/lib/ffmpeg";
-import { getPublicMediaUrl, savePipelineFile, readMediaBytes } from "@/lib/storage";
+import { readMediaBytes } from "@/lib/storage";
 import { mkdir } from "fs/promises";
 import os from "node:os";
 import path from "path";
 
+import { VOICE_FAILED_MESSAGE } from "./generate-voice-service";
+
 const RACHEL_VOICE_ID = "21m00Tcm4TlvDq8ikWAM";
 
-export async function generateVoiceover(
+/** Provider adapter. Callers persist the returned bytes; do not store provider URLs. */
+export async function synthesizeSpeech(
   script: string,
   voiceId?: string,
-): Promise<string> {
-  const buffer = hasElevenLabs()
-    ? await synthesizeElevenLabs(script, voiceId ?? getElevenLabsVoiceId())
-    : await synthesizeEspeak(script);
-  const stored = await savePipelineFile("voice.mp3", buffer);
-  return getPublicMediaUrl(stored.objectPath);
+): Promise<Buffer> {
+  if (hasElevenLabs()) {
+    return synthesizeElevenLabs(script, voiceId ?? getElevenLabsVoiceId());
+  }
+  return synthesizeEspeak(script);
 }
 
 async function synthesizeElevenLabs(
@@ -24,15 +27,14 @@ async function synthesizeElevenLabs(
 ): Promise<Buffer> {
   const apiKey = getEnv("ELEVENLABS_API_KEY");
   if (!apiKey) {
-    return synthesizeEspeak(script);
+    throw new HttpError(503, "Voice generation is not configured.");
   }
 
   const id = voiceId || RACHEL_VOICE_ID;
-  let lastError = "ElevenLabs request failed";
   for (let attempt = 0; attempt < 4; attempt += 1) {
-    const res = await fetch(
-      `https://api.elevenlabs.io/v1/text-to-speech/${id}`,
-      {
+    let res: Response;
+    try {
+      res = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${id}`, {
         method: "POST",
         headers: {
           "xi-api-key": apiKey,
@@ -47,24 +49,29 @@ async function synthesizeElevenLabs(
             similarity_boost: 0.75,
           },
         }),
-      },
-    );
+      });
+    } catch (error) {
+      console.error("ElevenLabs request failed", error);
+      throw new HttpError(502, VOICE_FAILED_MESSAGE);
+    }
 
     if (res.ok) {
       return Buffer.from(await res.arrayBuffer());
     }
     if (res.status === 429 || res.status === 503) {
       const retryAfter = Number(res.headers.get("retry-after"));
-      const waitMs = Number.isFinite(retryAfter) && retryAfter > 0
-        ? Math.min(retryAfter * 1000, 20_000)
-        : 1500 * 2 ** attempt;
+      const waitMs =
+        Number.isFinite(retryAfter) && retryAfter > 0
+          ? Math.min(retryAfter * 1000, 20_000)
+          : 1500 * 2 ** attempt;
       await new Promise((resolve) => setTimeout(resolve, waitMs));
       continue;
     }
-    lastError = await res.text();
-    throw new Error(`ElevenLabs rejected the job: ${lastError.slice(0, 500)}`);
+    const detail = await res.text().catch(() => "");
+    console.error("ElevenLabs rejected the job", res.status, detail.slice(0, 200));
+    throw new HttpError(502, VOICE_FAILED_MESSAGE);
   }
-  throw new Error(`ElevenLabs rejected the job: ${lastError.slice(0, 500)}`);
+  throw new HttpError(502, VOICE_FAILED_MESSAGE);
 }
 
 async function synthesizeEspeak(script: string): Promise<Buffer> {
